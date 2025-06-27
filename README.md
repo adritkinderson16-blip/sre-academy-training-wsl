@@ -103,4 +103,4 @@ By completing all topics and exercises, you will:
 
 Happy learning and implementing SRE best practices!
 
-![SRE Accademy](https://img.shields.io/badge/SRE-Bootcamp-blue)
+![SRE Academy](https://img.shields.io/badge/SRE-Academy-blue)
