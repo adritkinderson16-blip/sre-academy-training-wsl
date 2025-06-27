@@ -15,8 +15,8 @@ This repository offers a step-by-step learning path with hands-on exercises and 
 Before beginning any exercise or topic, clone the repository to your local machine:
 
 ```bash
-git clone https://github.com/cguilencr/sre-abc-training.git
-cd sre-abc-training
+git clone https://github.ibm.com/SRE-Academy/sre-academy-training.git
+cd sre-academy-training
 ```
 
 This will give you access to all the exercises (located in the `exercises/` folder) and topics (located in the `topicX/` folders).
