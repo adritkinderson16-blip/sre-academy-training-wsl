@@ -4,9 +4,7 @@
 
 ## Introduction
 
-Site Reliability Engineering (SRE) applies software engineering principles to operations to build scalable and highly reliable systems. SRE ensures system availability, reduces toil, and drives continuous improvement—striking a balance between innovation velocity and risk management.
-
-This repository offers a step-by-step learning path with hands-on exercises and supporting topics that introduce core SRE concepts, practices, and tooling. Each section contains clear objectives along with real-world examples for both aspiring and experienced SRE professionals.
+This repository is part of IBM’s internal SRE Academy initiative. It applies software engineering principles to operations, enabling learners to build scalable and highly reliable systems. The goal is to ensure system availability, reduce toil, and drive continuous improvement—striking a balance between innovation velocity and risk management.
 
 ---
 
@@ -18,6 +16,7 @@ Before beginning any exercise or topic, clone the repository to your local machi
 git clone https://github.ibm.com/SRE-Academy/sre-academy-training.git
 cd sre-academy-training
 ```
+> 💡 Note: You must be logged into [https://github.ibm.com](https://github.ibm.com) with your IBM w3id to access this repository.
 
 This will give you access to all the exercises (located in the `exercises/` folder) and topics (located in the `topicX/` folders).
 
@@ -29,6 +28,8 @@ This will give you access to all the exercises (located in the `exercises/` fold
 - [Exercises](#exercises)
 - [Learning Path](#learning-path)
 - [Final Objectives](#final-objectives)
+- [Contributing](CONTRIBUTING.md)
+- [License](LICENSE.md)
 - [Notes](#notes)
 
 ---
@@ -78,7 +79,7 @@ This will give you access to all the exercises (located in the `exercises/` fold
    These foundational concepts are essential for understanding SRE principles before diving into practical labs.
 
 2. **Proceed Through the Exercises Sequentially (Exercise 1 to Exercise 19):**  
-   The exercises build upon each other, guiding you from application creation and packaging to comprehensive monitoring, automation, and resilience engineering.
+   The exercises build on each other, guiding you from application development and packaging to full-stack monitoring, automation, and resilience engineering.
 
 ---
 
@@ -96,10 +97,10 @@ By completing all topics and exercises, you will:
 
 ## Notes
 
-- This repository is part of a practical training series developed for SRE bootcamps and team onboarding.
+- This repository is part of a practical training series developed for the SRE Academy and SRE team onboarding.
 - It is optimized for environments like Minikube but can be adapted to other Kubernetes setups.
 - Contributions and improvements are welcome. If you encounter issues or have suggestions, please open a pull request or GitHub issue.
 
 Happy learning and implementing SRE best practices!
 
-![SRE Bootcamp](https://img.shields.io/badge/SRE-Bootcamp-blue)
+![SRE Academy](https://img.shields.io/badge/SRE-Bootcamp-blue)
