@@ -118,7 +118,7 @@ podman info
 
 1. Navigate to the `exercise2` directory:
    ```bash
-   cd sre-abc-training/exercises/exercise2
+   cd sre-academy-training/exercises/exercise2
    ```
 
 2. Build the container image:
