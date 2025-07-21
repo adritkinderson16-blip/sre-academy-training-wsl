@@ -80,7 +80,7 @@ Before starting, ensure you have completed Exercises 1–3. Additionally, instal
 To begin, navigate to the directory for Exercise 4:
 
 ```bash
-cd sre-abc-training/exercises/exercise4
+cd sre-academy-training/exercises/exercise4
 ```
 
 This directory contains the necessary YAML files for the deployment and service configuration.
@@ -95,11 +95,13 @@ Install Minikube using Homebrew:
 brew install minikube
 ```
 
-Verify the installation:
+> **Note:** If you already followed the `prerequisites.md` setup from the beginning of the course, you should already have Minikube installed and ready to use. You can verify this with:
+>
+> ```bash
+> minikube version
+> ```
 
-```bash
-minikube version
-```
+If you see version output, you're good to continue.
 
 ---
 
