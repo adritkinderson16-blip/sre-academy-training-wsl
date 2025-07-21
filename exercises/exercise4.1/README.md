@@ -47,12 +47,12 @@ Ansible is an open-source automation tool primarily used for configuration manag
 To begin, navigate to the directory for Exercise 4.1:
 
 ```bash
-cd sre-abc-training/exercises/exercise4.1
-```
+cd sre-academy-training/exercises/exercise4.1
+````
 
 This directory contains the necessary files for the exercise, including `inventory.ini`, `playbook.yaml`, and `iac_paybook.yaml`.
 
----
+-----
 
 ## Step 1: Install pipx
 
@@ -63,7 +63,7 @@ brew install pipx
 pipx ensurepath
 ```
 
----
+-----
 
 ## Step 2: Install Ansible with pipx
 
@@ -76,25 +76,27 @@ pipx inject --include-apps ansible argcomplete
 ```
 
 Verify the installation:
+
 ```bash
 ansible --version
 ```
 
----
+-----
 
 ## Step 3: Getting Started with Ansible
 
 To prepare the environment, create a new directory for your Ansible project and navigate into it. Although this directory is already part of the cloned repository, the following command illustrates the structure:
 
 ```bash
-mkdir ansible_quickstart && cd ansible_quickstart
+cd ansible_quickstart
 ```
 
 The `ansible_quickstart` directory contains:
-- `inventory.ini`: Defines the systems Ansible will manage.
-- `playbook.yaml`: A simple playbook to test Ansible functionality.
 
----
+  - `inventory.ini`: Defines the systems Ansible will manage.
+  - `playbook.yaml`: A simple playbook to test Ansible functionality.
+
+-----
 
 ## Step 4: Setting Up an Inventory File
 
@@ -154,7 +156,7 @@ Expected output:
 }
 ```
 
----
+-----
 
 ## Step 5: Running an Ansible Playbook
 
@@ -164,7 +166,7 @@ To test Ansible and run the provided playbook, execute the following command:
 ansible-playbook -i inventory.ini playbook.yaml --ask-become-pass
 ```
 
-> **Note**: When prompted, enter your system password. This is required to elevate privileges for certain tasks.
+> **Note:** When prompted, enter your system password. This is required to elevate privileges for certain tasks.
 
 ### Verify the Output
 
@@ -177,7 +179,7 @@ PLAY [My first play] ***********************************************************
 
 TASK [Gathering Facts] ***********************************************************************************************************
 [WARNING]: Platform darwin on host 127.0.0.1 is using the discovered Python interpreter at /opt/homebrew/bin/python3.13, but future installation of another Python interpreter could change the
-meaning of that path. See https://docs.ansible.com/ansible-core/2.18/reference_appendices/interpreter_discovery.html for more information.
+meaning of that path. See [https://docs.ansible.com/ansible-core/2.18/reference_appendices/interpreter_discovery.html](https://docs.ansible.com/ansible-core/2.18/reference_appendices/interpreter_discovery.html) for more information.
 ok: [127.0.0.1]
 
 TASK [Ping my hosts] *************************************************************************************************************
@@ -192,19 +194,13 @@ PLAY RECAP *********************************************************************
 127.0.0.1                  : ok=3    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
 ```
 
----
+-----
 
 ## Final Objective
 
-At the end of this exercise, you should accomplish the following:
+At the end of this exercise, you should be able to:
 
-> **Important**  
-> Use Ansible to execute tasks defined in the playbook. Ensure you run the playbook (`playbook.yaml`) with the provided inventory file (`inventory.ini`) and observe the successful execution of all tasks.  
-> 
-> Example:
-> ```bash
-> ansible-playbook -i inventory.ini playbook.yaml --ask-become-pass
-> ```
-> When prompted, enter your system password. This allows privilege elevation for the required tasks. Confirm the results by reviewing the output in the terminal.
+  * **Successfully use Ansible** to execute tasks defined in a playbook, demonstrating basic infrastructure automation capabilities.
+  * Ensure the playbook (`playbook.yaml`) runs correctly with the provided inventory file (`inventory.ini`) and observe the successful execution of all tasks.
 
----
+-----
