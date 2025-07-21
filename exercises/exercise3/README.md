@@ -2,15 +2,15 @@
 
 ## Table of Contents
 
-* [Introduction to Docker Hub](#introduction-to-docker-hub)
-* [Creating a Docker Hub Account](#creating-a-docker-hub-account)
-* [Creating a Docker Repository](#creating-a-docker-repository)
-* [Pushing the Image to Docker Hub](#pushing-the-image-to-docker-hub)
-  * [Verify the Local Image](#verify-the-local-image)
-  * [Tag the Local Image](#tag-the-local-image)
-  * [Push the Image to Docker Hub](#push-the-image-to-docker-hub)
-* [Running Remote Images](#running-remote-images)
-* [Final Objective](#final-objective)
+- [Introduction to Docker Hub](#introduction-to-docker-hub)
+- [Creating a Docker Hub Account](#creating-a-docker-hub-account)
+- [Creating a Docker Repository](#creating-a-docker-repository)
+- [Pushing the Image to Docker Hub](#pushing-the-image-to-docker-hub)
+  - [Verify the Local Image](#verify-the-local-image)
+  - [Tag the Local Image](#tag-the-local-image)
+  - [Push the Image to Docker Hub](#push-the-image-to-docker-hub)
+- [Running Remote Images](#running-remote-images)
+- [Final Objective](#final-objective)
 
 ---
 
@@ -20,11 +20,11 @@ Docker Hub is a cloud-based registry service where container images can be store
 
 ### Key Features:
 
-* **Image Repositories:** Store and share container images publicly or privately.
-* **Automated Builds:** Automatically build images from source repositories.
-* **Webhooks:** Trigger actions on image updates.
-* **Teams and Organizations:** Manage team permissions for repositories.
-* **Official Images:** Access Docker-maintained, verified container images.
+- **Image Repositories:** Store and share container images publicly or privately.
+- **Automated Builds:** Automatically build images from source repositories.
+- **Webhooks:** Trigger actions on image updates.
+- **Teams and Organizations:** Manage team permissions for repositories.
+- **Official Images:** Access Docker-maintained, verified container images.
 
 In this exercise, we will push the containerized Python application created in **Exercise #2** to Docker Hub for distribution.
 
@@ -36,7 +36,7 @@ To begin, navigate to the directory for Exercise 3:
 
 ```bash
 cd sre-academy-training/exercises/exercise3
-```
+````
 
 This directory contains the necessary files for the exercise, including the `Dockerfile` and application code.
 
@@ -119,7 +119,7 @@ We will tag the local image with your Docker Hub username and repository name.
 2. Example:
 
    ```bash
-   podman tag my-python-app:latest shesho/python-flask-app:latest
+   podman tag my-python-app:latest shesho/my-python-app:latest
    ```
 
 This step ensures the local image is correctly associated with your Docker Hub repository.
@@ -143,7 +143,7 @@ This step ensures the local image is correctly associated with your Docker Hub r
 3. Example:
 
    ```bash
-   podman push shesho/python-flask-app:latest
+   podman push shesho/my-python-app:latest
    ```
 
 ---
