@@ -33,7 +33,7 @@ In this exercise, we will push the containerized Python application created in *
 To begin, navigate to the directory for Exercise 3:
 
 ```bash
-cd sre-abc-training/exercises/exercise3
+cd sre-academy-training/exercises/exercise3
 ```
 
 This directory contains the necessary files for the exercise, including the `Dockerfile` and application code.
