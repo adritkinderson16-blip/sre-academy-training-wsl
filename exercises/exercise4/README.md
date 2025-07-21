@@ -17,7 +17,6 @@
   - [Steps to Deploy](#steps-to-deploy)
 - [Exploring the Application in the Dashboard](#exploring-the-application-in-the-dashboard)
 - [Final Objective](#final-objective)
-- [Cleanup](#cleanup)
 
 ---
 
@@ -189,32 +188,5 @@ At the end of this exercise, you should accomplish the following:
 > **[IMPORTANT]**  
 > Use the Minikube dashboard to inspect the deployment and service. Ensure all pods are running, and the application is accessible.  
 > ![k8s_dashboard](k8s_dashboard.png)
-
----
-
-## Cleanup
-
-After completing the exercise, clean up the resources to keep your environment tidy.
-
-1. **Delete the Deployment**:
-   ```bash
-   kubectl delete -f deployment.yaml
-   ```
-
-2. **Delete the Service**:
-   ```bash
-   kubectl delete -f service.yaml
-   ```
-
-3. **Verify All Resources Are Deleted**:
-   ```bash
-   kubectl get pods
-   ```
-   The output should show:
-   ```
-   No resources found in default namespace.
-   ```
-
-By following these steps, your environment will be ready for the next exercise.
 
 ---
