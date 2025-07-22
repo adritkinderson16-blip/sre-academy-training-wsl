@@ -155,6 +155,12 @@ http://127.0.0.1:5000/
 
 ---
 
+## Conclusion
+
+You have now successfully containerized and run a Python application using Podman. This exercise demonstrates the basics of containerization and prepares you for more advanced deployment scenarios.
+
+-----
+
 ## Final Objective
 
 At the end of this exercise, you should accomplish the following:
