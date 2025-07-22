@@ -5,7 +5,6 @@
   - [Introduction](https://www.google.com/search?q=%23introduction)
   - [What is Docker?](https://www.google.com/search?q=%23what-is-docker)
   - [What is Podman?](https://www.google.com/search?q=%23what-is-podman)
-  - [Project Structure](https://www.google.com/search?q=%23project-structure)
   - [Dockerfile Explanation](https://www.google.com/search?q=%23dockerfile-explanation)
   - [Prerequisites](https://www.google.com/search?q=%23prerequisites)
   - [Building the Container Image](https://www.google.com/search?q=%23building-the-container-image)
@@ -40,27 +39,6 @@ This exercise focuses on containerizing a Python application and running it usin
   - Support for running containers in environments where Docker is not available or needed.
 
 Unlike Docker, Podman does not require root access and provides improved security for managing containers.
-
------
-
-## Project Structure
-
-Here is the project structure for this exercise:
-
-```
-exercises/exercise2/
-├── Dockerfile
-├── Infra.png
-├── README.md
-├── app.png
-└── app.py
-```
-
-  - **Dockerfile**: Contains the instructions for building the container image.
-  - **Infra.png**: Diagram or visualization of the application's infrastructure.
-  - **README.md**: This file contains instructions for the exercise.
-  - **app.png**: Screenshot of the application running.
-  - **app.py**: Python script for the application.
 
 -----
 
