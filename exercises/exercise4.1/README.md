@@ -1,6 +1,7 @@
 # Infrastructure as Code (IaC) with Ansible
 
 ## Table of Contents
+
 - [What is Infrastructure as Code (IaC)?](#what-is-infrastructure-as-code-iac)
   - [Why is IaC Important?](#why-is-iac-important)
 - [What is Ansible?](#what-is-ansible)
@@ -11,11 +12,15 @@
 - [Step 3: Getting Started with Ansible](#step-3-getting-started-with-ansible)
 - [Step 4: Setting Up an Inventory File](#step-4-setting-up-an-inventory-file)
   - [Testing the Inventory File](#testing-the-inventory-file)
-- [Step 5: Running an Ansible Playbook](#step-5-running-an-ansible-playbook)
+- [Step 5: Running a Basic Ansible Playbook](#step-5-running-a-basic-ansible-playbook)
   - [Verify the Output](#verify-the-output)
+- [Step 6: Automating Infrastructure Setup with IaC Playbook](#step-6-automating-infrastructure-setup-with-iac-playbook)
+  - [Review the IaC Playbook](#review-the-iac-playbook)
+  - [Run the IaC Playbook](#run-the-iac-playbook)
+  - [Verify Infrastructure Setup](#verify-infrastructure-setup)
 - [Final Objective](#final-objective)
 
----
+-----
 
 ## What is Infrastructure as Code (IaC)?
 
@@ -23,12 +28,12 @@ Infrastructure as Code (IaC) is a modern approach to managing and provisioning c
 
 ### Why is IaC Important?
 
-- **Consistency**: IaC helps eliminate configuration drift and ensures that environments are consistent across development, testing, and production.
-- **Efficiency**: Manual infrastructure management is time-consuming. IaC automates repetitive tasks, making setup faster and reducing human error.
-- **Scalability**: With IaC, scaling infrastructure up or down is much easier, especially in environments like cloud computing where resources can be dynamically adjusted.
-- **Version Control**: Since infrastructure is managed as code, all changes can be tracked through version control, enabling rollback if an issue arises.
+  - **Consistency**: IaC helps eliminate configuration drift and ensures that environments are consistent across development, testing, and production.
+  - **Efficiency**: Manual infrastructure management is time-consuming. IaC automates repetitive tasks, making setup faster and reducing human error.
+  - **Scalability**: With IaC, scaling infrastructure up or down is much easier, especially in environments like cloud computing where resources can be dynamically adjusted.
+  - **Version Control**: Since infrastructure is managed as code, all changes can be tracked through version control, enabling rollback if an issue arises.
 
----
+-----
 
 ## What is Ansible?
 
@@ -36,11 +41,11 @@ Ansible is an open-source automation tool primarily used for configuration manag
 
 ### Key Features of Ansible
 
-- **Agentless**: No need to install additional software on the target machines.
-- **Idempotency**: Ensures that applying the same configuration multiple times yields the same result.
-- **Flexibility**: Supports a wide range of modules for different environments.
+  - **Agentless**: No need to install additional software on the target machines.
+  - **Idempotency**: Ensures that applying the same configuration multiple times yields the same result.
+  - **Flexibility**: Supports a wide range of modules for different environments.
 
----
+-----
 
 ## Navigate to the Exercise Directory
 
@@ -48,7 +53,7 @@ To begin, navigate to the directory for Exercise 4.1:
 
 ```bash
 cd sre-academy-training/exercises/exercise4.1
-````
+```
 
 This directory contains the necessary files for the exercise, including `inventory.ini`, `playbook.yaml`, and `iac_paybook.yaml`.
 
@@ -95,6 +100,7 @@ The `ansible_quickstart` directory contains:
 
   - `inventory.ini`: Defines the systems Ansible will manage.
   - `playbook.yaml`: A simple playbook to test Ansible functionality.
+  - `iac_paybook.yaml`: A more complex playbook to automate Minikube and Podman setup.
 
 -----
 
@@ -158,9 +164,9 @@ Expected output:
 
 -----
 
-## Step 5: Running an Ansible Playbook
+## Step 5: Running a Basic Ansible Playbook
 
-To test Ansible and run the provided playbook, execute the following command:
+To test your Ansible setup and run the provided basic playbook, execute the following command:
 
 ```bash
 ansible-playbook -i inventory.ini playbook.yaml --ask-become-pass
@@ -196,11 +202,46 @@ PLAY RECAP *********************************************************************
 
 -----
 
+## Step 6: Automating Infrastructure Setup with IaC Playbook
+
+Now, let's explore a more practical application of IaC by running a playbook designed to set up Minikube and Podman on your machine. This demonstrates how you can automate complex environment configurations.
+
+### Review the IaC Playbook
+
+Before running it, take a moment to review the `iac_paybook.yaml` file in your `ansible_quickstart` directory. Notice how it uses conditional tasks (`when:`) for different operating systems (macOS, Debian/Ubuntu) and various modules (`homebrew`, `apt`, `get_url`, `command`) to install software and start services.
+
+### Run the IaC Playbook
+
+> **[\!WARNING]**
+> If you already have Minikube and Podman set up from previous exercises, running this playbook might attempt to reinstall or restart them. This is generally **idempotent** (meaning it will achieve the desired state without breaking existing installations), but be aware of the actions it performs.
+> If you wish to test a fresh setup, you might consider running `minikube delete` and cleaning up Podman installations before this step (refer to previous exercise clean-up instructions).
+
+Execute the `iac_paybook.yaml`:
+
+```bash
+ansible-playbook -i inventory.ini iac_paybook.yaml --ask-become-pass
+```
+
+> **Note:** You will be prompted for your system password as this playbook performs installations that require elevated privileges. The playbook may take a few minutes to complete, especially if it needs to download and install packages.
+
+### Verify Infrastructure Setup
+
+After the playbook completes, you can verify that Minikube is running using the same commands from Exercise 4:
+
+```bash
+minikube status
+minikube dashboard
+```
+
+You should see that Minikube is running and the dashboard launches successfully, demonstrating that the playbook effectively provisioned your local Kubernetes environment.
+
+-----
+
 ## Final Objective
 
 At the end of this exercise, you should be able to:
 
-  * **Successfully use Ansible** to execute tasks defined in a playbook, demonstrating basic infrastructure automation capabilities.
-  * Ensure the playbook (`playbook.yaml`) runs correctly with the provided inventory file (`inventory.ini`) and observe the successful execution of all tasks.
+  * **Successfully use Ansible** to execute basic tasks defined in a playbook.
+  * **Understand and demonstrate the principles of Infrastructure as Code** by running an Ansible playbook (`iac_paybook.yaml`) that automates the setup of tools like Minikube and Podman, ensuring a reproducible environment.
 
 -----
