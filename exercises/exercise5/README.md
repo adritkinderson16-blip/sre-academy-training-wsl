@@ -1,6 +1,7 @@
 # Deploying Prometheus in Minikube
 
 ## Table of Contents
+
 - [Navigate to the Application Directory](#navigate-to-the-application-directory)
 - [Overview](#overview)
 - [Key Features of Prometheus](#key-features-of-prometheus)
@@ -16,7 +17,7 @@
 - [Running the Playbook](#running-the-playbook)
 - [Final Objective](#final-objective)
 
----
+-----
 
 ## Navigate to the Application Directory
 
@@ -24,7 +25,7 @@ To begin, navigate to the directory for Exercise 5:
 
 ```bash
 cd sre-academy-training/exercises/exercise5
-````
+```
 
 > **Note**: This directory contains the necessary YAML files for the deployment and service configuration.
 
@@ -227,21 +228,25 @@ To deploy Prometheus using Ansible:
 
     If not, use the manual access method as described in "Step 5: Verify Prometheus Configuration" above.
 
----
+-----
 
 ## Final Objective
 
 At the end of this exercise, you should accomplish the following:
 
-> **Important**  
-> Access Prometheus through the exposed service in Minikube. Use the Prometheus interface to query metrics such as `memory`, `CPU`, or `kubernetes`.  
-> Example:  
-> - Search for metrics like `memory` or `CPU` in the input field.  
-> - View the results in table and graph formats.  
-> - As Prometheus was recently installed, there may be limited data available.
+> **Important**
+> Access Prometheus through the exposed service in Minikube. Use the Prometheus interface to query metrics such as `up` or `prometheus_build_info`.
+>
+> **Note:** The current Prometheus configuration only scrapes itself. Therefore, you will primarily see metrics related to the Prometheus server's own performance and status, rather than general system metrics like CPU or memory of the Kubernetes cluster nodes.
+>
+> Example:
+>
+>   - Search for metrics like `up` or `prometheus_build_info` in the input field.
+>   - View the results in table and graph formats.
+>   - As Prometheus was recently installed, there may be limited data available.
 
-> **Expected Output**  
-> Once successful, you should see a table similar to the following:  
+> **Expected Output**
+> Once successful, you should see a table similar to the following:
 > ![Prometheus Table Output](prometheus_table.png)
 
----
+-----
