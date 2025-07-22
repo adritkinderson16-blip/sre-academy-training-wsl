@@ -1,0 +1,37 @@
+---
+- name: Deploy OpenTelemetry Stack
+  hosts: all
+
+  tasks:
+    - name: Apply OpenTelemetry Collector
+      ansible.builtin.command: kubectl apply -f otel-collector.yaml --validate=false
+      register: otel_collector_apply
+      changed_when: otel_collector_apply.rc != 0
+
+    - name: Wait for OtelCollector pod to be ready
+      ansible.builtin.command: kubectl wait --for=condition=ready pod -l app=otel-collector -n opentelemetry --timeout=300s
+
+    - name: Apply Jaeger
+      ansible.builtin.command: kubectl apply -f jaeger.yaml --validate=false
+      register: jaeger_apply
+      changed_when: jaeger_apply.rc != 0
+
+    - name: Wait for Jaeger pod to be ready
+      ansible.builtin.command: kubectl wait --for=condition=ready pod -l app=jaeger -n opentelemetry --timeout=300s
+
+    - name: Deploy Application
+      ansible.builtin.command: kubectl apply -f deployment.yaml --validate=false
+      register: app_deploy
+      changed_when: app_deploy.rc != 0
+
+    - name: Wait for Application pods to be ready
+      ansible.builtin.command: kubectl wait --for=condition=ready pod -l app=sre-abc-training-app -n application --timeout=300s
+
+    - name: Get all pods status (final check)
+      ansible.builtin.command: kubectl get pods -A
+      register: all_pods_status
+      changed_when: false
+
+    - name: Print all pods status
+      ansible.builtin.debug:
+        msg: "{{ all_pods_status.stdout }}"
