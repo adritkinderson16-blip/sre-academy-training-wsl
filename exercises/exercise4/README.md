@@ -1,6 +1,7 @@
 # Deploying a Python Application on Kubernetes Using Minikube
 
 ## Table of Contents
+
 - [Introduction](#introduction)
   - [What is Kubernetes?](#what-is-kubernetes)
   - [What is Minikube?](#what-is-minikube)
@@ -16,9 +17,10 @@
   - [Service YAML](#service-yaml)
   - [Steps to Deploy](#steps-to-deploy)
 - [Exploring the Application in the Dashboard](#exploring-the-application-in-the-dashboard)
+- [Accessing the Application](#accessing-the-application)
 - [Final Objective](#final-objective)
 
----
+-----
 
 ## Introduction
 
@@ -29,50 +31,55 @@ This exercise will guide you through deploying a Python application to Kubernete
 Kubernetes (K8s) is an open-source platform that automates the deployment, scaling, and management of containerized applications. It provides a resilient framework to run distributed systems reliably.
 
 #### Key Features:
-- **Automatic bin packing**: Allocates resources based on container requirements.
-- **Self-healing**: Restarts or replaces containers as needed.
-- **Horizontal scaling**: Dynamically scales applications based on demand.
-- **Service discovery and load balancing**: Manages traffic routing between applications.
-- **Automated rollouts and rollbacks**: Simplifies application updates.
+
+  - **Automatic bin packing**: Allocates resources based on container requirements.
+  - **Self-healing**: Restarts or replaces containers as needed.
+  - **Horizontal scaling**: Dynamically scales applications based on demand.
+  - **Service discovery and load balancing**: Manages traffic routing between applications.
+  - **Automated rollouts and rollbacks**: Simplifies application updates.
 
 ### What is Minikube?
 
 Minikube is a lightweight Kubernetes implementation for local development and testing. It creates a single-node Kubernetes cluster on your local machine, enabling you to learn and experiment with Kubernetes.
 
 #### Why Use Minikube?
-- **Simple Setup**: Quickly spin up a Kubernetes environment.
-- **Feature Support**: Most Kubernetes features, such as DNS and dashboards, are available.
-- **Resource Management**: Manage cluster resources locally without affecting production.
+
+  - **Simple Setup**: Quickly spin up a Kubernetes environment.
+  - **Feature Support**: Most Kubernetes features, such as DNS and dashboards, are available.
+  - **Resource Management**: Manage cluster resources locally without affecting production.
 
 ### What is kubectl?
 
 `kubectl` is the command-line tool for interacting with Kubernetes clusters. It allows you to deploy applications, inspect resources, and manage clusters.
 
 #### Common Commands:
-- `kubectl get pods`: List all running pods.
-- `kubectl apply -f <file.yaml>`: Apply configuration from a YAML file.
-- `kubectl delete -f <file.yaml>`: Delete resources defined in a YAML file.
+
+  - `kubectl get pods`: List all running pods.
+  - `kubectl apply -f <file.yaml>`: Apply configuration from a YAML file.
+  - `kubectl delete -f <file.yaml>`: Delete resources defined in a YAML file.
 
 ### What is YAML?
 
 YAML (YAML Ain't Markup Language) is a data serialization format used to configure Kubernetes resources. It is human-readable and ideal for defining structured data.
 
 #### Key YAML Concepts:
-- **apiVersion**: Defines the Kubernetes API version.
-- **kind**: Specifies the resource type (e.g., Deployment, Service).
-- **metadata**: Contains resource information like names and labels.
-- **spec**: Describes the desired state of the resource.
 
----
+  - **apiVersion**: Defines the Kubernetes API version.
+  - **kind**: Specifies the resource type (e.g., Deployment, Service).
+  - **metadata**: Contains resource information like names and labels.
+  - **spec**: Describes the desired state of the resource.
+
+-----
 
 ## Prerequisites
 
 Before starting, ensure you have completed Exercises 1–3. Additionally, install the following tools:
-- **Podman**
-- **Minikube**
-- **kubectl**
 
----
+  - **Podman**
+  - **Minikube**
+  - **kubectl**
+
+-----
 
 ## Navigate to the Application Directory
 
@@ -80,7 +87,7 @@ To begin, navigate to the directory for Exercise 4:
 
 ```bash
 cd sre-academy-training/exercises/exercise4
-````
+```
 
 This directory contains the necessary YAML files for the deployment and service configuration.
 
@@ -94,7 +101,7 @@ Install Minikube using Homebrew:
 brew install minikube
 ```
 
-> **Note:** If you already followed the `prerequisites.md` setup from the beginning of the course, you should already have Minikube installed and ready to use. You can verify this with:
+> **Note:** If you already have Minikube installed, you can verify this with:
 >
 > ```bash
 > minikube version
@@ -128,7 +135,16 @@ Launch the Kubernetes dashboard:
 minikube dashboard
 ```
 
-> **Note:** Open a new terminal for further commands while the dashboard runs.
+When the dashboard opens in your browser, **notice that it is currently empty**. This is expected because you haven't deployed any applications yet.
+
+The Kubernetes Dashboard is a **web-based user interface** that allows you to:
+
+  * **Deploy containerized applications** to a Kubernetes cluster.
+  * **Troubleshoot your applications** by inspecting logs and monitoring resource usage.
+  * **Manage cluster resources** like Deployments, Pods, Services, and more.
+    It's a powerful tool for visualizing and interacting with your cluster.
+
+> **Note:** The `minikube dashboard` command will keep running in your terminal. To proceed with the next steps, you will need to **open an additional terminal window** or press `Ctrl + C` in the current terminal to close the dashboard and then reopen it later.
 
 -----
 
@@ -152,16 +168,19 @@ The `service.yaml` exposes the application using a NodePort.
     kubectl apply -f deployment.yaml
     ```
 
-2.  Apply the Service:
+2.  **Verify the Pods (Initial State):**
+    After applying the deployment, the Kubernetes cluster will start pulling the image and creating the pods. This process can take up to **1-2 minutes** depending on your network speed. Run the following command to observe the status:
+
+    ```bash
+    kubectl get pods -A
+    ```
+
+    You should see your `sre-abc-training-app` pods in a `ContainerCreating` or `Pending` status initially. **Wait until all three pods show `1/1` in the `READY` column and `Running` in the `STATUS` column** before moving to the next step. You may need to run this command multiple times.
+
+3.  Apply the Service:
 
     ```bash
     kubectl apply -f service.yaml
-    ```
-
-3.  Verify the Pods:
-
-    ```bash
-    kubectl get pods
     ```
 
 4.  Verify the Service:
@@ -170,23 +189,44 @@ The `service.yaml` exposes the application using a NodePort.
     kubectl get service sre-abc-training-service
     ```
 
+    This command will show you the service details, including the `NodePort` (which should be `30007`) that exposes your application.
+
 -----
 
 ## Exploring the Application in the Dashboard
 
-1.  Open the Minikube dashboard:
+Now that your application is deployed, let's look at the dashboard again.
+
+1.  Open the Minikube dashboard (if you closed it earlier):
 
     ```bash
     minikube dashboard
     ```
 
-2.  Explore:
+2.  **Explore the Dashboard with Data:**
+    You will now see data populating the dashboard. Explore the following sections:
 
-      - **Workloads \> Deployments**: View the `sre-abc-training-app` deployment, replicas, and status.
-      - **Network \> Services**: Review the `sre-abc-training-service`, its NodePort, and associated pods.
+      - **Workloads \> Deployments**: View the `sre-abc-training-app` deployment, confirming it has 3 replicas, and observe their current status (they should be **Running**).
+      - **Workloads \> Pods**: See individual pods for your application, their status, and logs. This is where you can confirm they are all healthy.
+      - **Network \> Services**: Review the `sre-abc-training-service`, its type (`NodePort`), the internal and external ports, and the associated pods it routes traffic to.
 
+-----
 
----
+## Accessing the Application
+
+To directly access your application from your web browser:
+
+1.  Get the URL for your service:
+
+    ```bash
+    minikube service sre-abc-training-service --url
+    ```
+
+    This command will output the URL (e.g., `http://192.168.49.2:30007`).
+
+2.  Open the URL in your web browser. You should see "Hello, World\!" displayed.
+
+-----
 
 ## Final Objective
 
