@@ -183,6 +183,25 @@ ansible-playbook -i inventory.ini deploy.yaml
 
 ---
 
+## Optional: Use cluster.sh to Reset and Redeploy
+
+If your Kubernetes environment has leftover resources from previous exercises or if you encounter deployment conflicts, you can use the provided script to clean and redeploy everything automatically:
+
+```bash
+chmod +x cluster.sh
+./cluster.sh
+```
+
+This script will:
+
+* Delete any leftover deployments from Exercise 4 and this exercise.
+* Reapply the Python application, Otel Collector, and Jaeger.
+* Reuse the Grafana configuration from Exercise 7 (if needed).
+
+> Use this as a convenience script when the manual steps become repetitive or if you're troubleshooting issues in your cluster.
+
+---
+
 ## **Expected Results in Jaeger UI**
 
 * **Trace Dashboard**

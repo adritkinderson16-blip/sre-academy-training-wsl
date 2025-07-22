@@ -245,6 +245,25 @@ minikube service grafana-service -n monitoring
 
 ---
 
+## Optional: Run `cluster.sh` to Deploy
+
+If you run into issues applying resources manually (e.g., conflicting services or outdated configurations), you can use the provided `cluster.sh` script to clean and redeploy the environment:
+
+```bash
+chmod +x cluster.sh
+./cluster.sh
+```
+
+This script will:
+
+* Reapply required workloads from earlier exercises.
+* Clean up Prometheus and Grafana from previous setups.
+* Deploy the updated cAdvisor and Prometheus configuration.
+
+> Use this as a recovery mechanism if the manual steps fail due to a messy Kubernetes environment.
+
+---
+
 ## Final Objective
 
 At the end of this exercise, you should achieve the following:
