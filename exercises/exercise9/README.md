@@ -1,117 +1,114 @@
+
 # Generating Trace-Based Metrics Using OpenTelemetry and Prometheus
 
-## **Table of Contents**  
+## **Table of Contents**
 
-- [Overview](#overview)  
-- [Navigate to the Directory](#navigate-to-the-directory)  
-- [Configuring OpenTelemetry Collector for Trace-Based Metrics](#configuring-opentelemetry-collector-for-trace-based-metrics)  
-   - [Steps Overview](#steps-overview)  
-   - [SpanMetrics Connector](#spanmetrics-connector)  
-   - [Example Configuration for OpenTelemetry Collector](#example-configuration-for-opentelemetry-collector)  
-     - [Key Configuration Components](#key-configuration-components)  
-   - [Exporting Metrics to Prometheus](#exporting-metrics-to-prometheus)  
-   - [Build a Dashboard in Grafana Using the New Metrics](#build-a-dashboard-in-grafana-using-the-new-metrics)  
-- [Deployment](#deployment)  
-- [Tip for Infrastructure as Code (IaC) with Ansible](#tip-for-infrastructure-as-code-iac-with-ansible)  
+- [Overview](#overview)
+- [Navigate to the Directory](#navigate-to-the-directory)
+- [Deploy the Environment](#deploy-the-environment)
+- [Understanding the Configuration](#understanding-the-configuration)
+  - [SpanMetrics Connector](#spanmetrics-connector)
+  - [OpenTelemetry Collector Example](#opentelemetry-collector-example)
+  - [Prometheus Configuration Example](#prometheus-configuration-example)
+- [Accessing Prometheus and Grafana](#accessing-prometheus-and-grafana)
+  - [Prometheus](#prometheus)
+  - [Grafana](#grafana)
 - [Final Objective](#final-objective)
-- [Cleanup](#cleanup)
 
 ---
 
-## **Overview**  
+## **Overview**
 
-In this exercise, we will configure the **OpenTelemetry Collector** to generate trace-based metrics from a Python application and send them to **Prometheus**. These metrics will then be visualized using **Grafana** to help monitor request count, error count, and request duration.  
+In this exercise, we configure the **OpenTelemetry Collector** to generate trace-based metrics from a Python application and send them to **Prometheus**. These metrics will then be visualized using **Grafana** to monitor request count, error count, and request duration.
 
-The key components involved in this exercise are:  
-- **OpenTelemetry Collector**: A middleware for receiving, processing, and exporting telemetry data.  
-- **SpanMetrics Connector**: Converts span (trace) data into structured metrics.  
-- **Prometheus**: A monitoring system that collects time-series metrics.  
-- **Grafana**: A visualization tool for creating dashboards from Prometheus metrics.  
-
-By the end of this exercise, you will be able to track application performance metrics derived from traces, enhancing observability and monitoring capabilities.  
+Key components involved:
+- **OpenTelemetry Collector**
+- **SpanMetrics Connector**
+- **Prometheus**
+- **Grafana**
 
 ![Infra](Infra.png)
 
 ---
 
-## **Navigate to the Directory**  
-
-Before proceeding with the steps, navigate to the correct directory using:  
+## **Navigate to the Directory**
 
 ```bash
-cd sre-abc-training/exercises/exercise9
+cd sre-academy-training/exercises/exercise9
 ```
 
-The required files for this exercise are already included in the directory. You do not need to create them manually.
+---
+
+## **Deploy the Environment**
+
+Use the provided shell script to deploy the Python app, OpenTelemetry Collector, Jaeger, Prometheus, and Grafana:
+
+```bash
+chmod +x cluster.sh
+./cluster.sh
+```
+
+> ℹ️ **Note:**  
+> This script **automates the entire setup**, including:
+> - Cleaning previous deployments
+> - Creating the necessary namespaces
+> - Applying all required manifests (`otel-collector.yaml`, `prometheus.yaml`, `grafana.yaml`, etc.)
+> 
+> You **do not need to modify or apply YAML files manually** unless you are debugging or customizing.
+
+After running the script, wait 30–60 seconds and confirm all pods are running:
+
+```bash
+kubectl get pods -A
+```
 
 ---
 
-## **Configuring OpenTelemetry Collector for Trace-Based Metrics**  
+## **Understanding the Configuration**
 
-### **Steps Overview**  
-
-1. **Install and Configure the SpanMetrics Connector**: Converts span (trace) data into structured metrics.  
-2. **Configure the OpenTelemetry Collector**: Defines how traces are processed and converted into metrics.  
-3. **Export Metrics to Prometheus**: Sends the generated metrics for monitoring.  
-4. **Visualize Metrics in Grafana**: Creates a dashboard to display the extracted trace-based metrics.  
+Below are example configurations used in the exercise. You **don’t need to edit these files** — they are deployed automatically by the script. These are here to help you understand what’s happening under the hood.
 
 ---
 
-### **SpanMetrics Connector**  
+### **SpanMetrics Connector**
 
-The `spanmetricsconnector` in OpenTelemetry allows span (trace) data to be converted into useful metrics. It tracks:  
-- **Request Count**: Total number of requests received.  
-- **Error Count**: Total number of errors encountered.  
-- **Request Duration**: Measures latency across different operations.  
+The `spanmetricsconnector` converts span (trace) data into useful metrics:
+- **Request Count**
+- **Error Count**
+- **Request Duration**
 
 ---
 
-### **Example Configuration for OpenTelemetry Collector**  
+### **OpenTelemetry Collector Example**
 
-Modify the `otel-collector.yaml` file to enable the SpanMetrics Connector and configure Prometheus as the exporter.  
+File: `otel-collector.yaml`
 
 ```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: otel-config
-  namespace: opentelemetry
-data:
-  config.yaml: |
-    exporters:
-      prometheus:
-        endpoint: "0.0.0.0:9464"
-        namespace: "otel_collector"
+exporters:
+  prometheus:
+    endpoint: "0.0.0.0:9464"
+    namespace: "otel_collector"
 
-    connectors:
-      spanmetrics:
-        namespace: span.metrics
+connectors:
+  spanmetrics:
+    namespace: span.metrics
 
-    service:
-      pipelines:
-        traces:
-          receivers: [otlp]
-          processors: [batch]
-          exporters: [otlp/jaeger, spanmetrics]
-        metrics:
-          receivers: [otlp, spanmetrics]
-          exporters: [prometheus]
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/jaeger, spanmetrics]
+    metrics:
+      receivers: [otlp, spanmetrics]
+      exporters: [prometheus]
 ```
-
-### **Key Configuration Components**  
-
-- **Receivers**: Collect telemetry data from the application.  
-- **Processors**: Batch processing for efficiency.  
-- **Exporters**:  
-  - `spanmetrics`: Converts spans into structured metrics.  
-  - `prometheus`: Sends the metrics to Prometheus.  
-- **Pipelines**: Define how data flows from receivers to exporters.  
 
 ---
 
-### **Exporting Metrics to Prometheus**  
+### **Prometheus Configuration Example**
 
-Modify the `prometheus.yaml` configuration to scrape metrics from the OpenTelemetry Collector.  
+File: `prometheus.yaml`
 
 ```yaml
 - job_name: 'otel-collector'
@@ -120,122 +117,53 @@ Modify the `prometheus.yaml` configuration to scrape metrics from the OpenTeleme
     - targets: ['otel-collector.opentelemetry.svc.cluster.local:9464']
 ```
 
-Verify that Prometheus is collecting the new trace-based metrics:  
+Prometheus will scrape metrics exposed by the OpenTelemetry Collector using this job.
+
+---
+
+## **Accessing Prometheus and Grafana**
+
+### **Prometheus**
+
+Open the Prometheus UI using:
 
 ```bash
 minikube service prometheus-service -n monitoring
 ```
 
-Open Prometheus UI and search for metrics with the prefix **otel_collector_span**.  
+In the UI, search for metrics with the prefix:
 
-![metrics-at-prometheus](metrics-at-prometheus.png)  
-
----
-
-### **Build a Dashboard in Grafana Using the New Metrics**  
-
-Create a new **Grafana panel** using the metric `otel_collector_span_metrics_calls_total`. Filter results to display only errors in the `goo` function:  
-
-```yaml
-{
-  "datasource": "Prometheus",
-  "targets": [
-    {
-      "expr": "rate(otel_collector_span_metrics_calls_total{span_name=\"goo\", status_code=\"STATUS_CODE_ERROR\"}[5m])",
-      "refId": "C"
-    }
-  ],
-  "title": "goo application errors",
-}
+```
+otel_collector_span_metrics_calls_total
 ```
 
-This will generate a visualization of error rates.  
-
-![Grafana-dashboard](Grafana-dashboard.png)  
+These are automatically generated from the application traces.
 
 ---
 
-## **Deployment**  
+### **View the Dashboard in Grafana**
 
-Before deploying the new configuration, clean up previous exercise components and apply the new settings.  
+Once the deployment is complete and all pods are in the Running state, open Grafana:
 
 ```bash
-#!/bin/bash
-kubectl delete ns application opentelemetry monitoring
-sleep 5
-kubectl apply -f ../exercise8/deployment.yaml
-kubectl apply -f ./otel-collector.yaml
-kubectl apply -f ../exercise8/jaeger.yaml
-kubectl apply -f ./prometheus.yaml
-kubectl apply -f ./grafana.yaml
-```
-
----
-
-## **Tip for Infrastructure as Code (IaC) with Ansible**  
-
-To automate the cleanup and deployment process, use the following **Ansible playbook**:  
-
-```yaml
----
-- name: Automate Kubernetes Cleanup and Deployment
-  hosts: all
-  gather_facts: no
-
-  tasks:
-    - name: Delete namespaces
-      command: kubectl delete ns application opentelemetry monitoring
-      ignore_errors: yes
-
-    - name: Wait for cleanup
-      wait_for:
-        timeout: 5
-
-    - name: Apply new configurations
-      command: kubectl apply -f {{ item }}
-      loop:
-        - ../exercise8/deployment.yaml
-        - ./otel-collector.yaml
-        - ../exercise8/jaeger.yaml
-        - ./prometheus.yaml
-        - ./grafana.yaml
-```
-
-Run the playbook:  
-
-```bash
-ansible-playbook -i ../exercise4.1/ansible_quickstart/inventory.ini infra.yaml
 minikube service grafana-service -n monitoring
 ```
 
----
+Log in (default is usually `admin` / `admin`).
 
-## **Final Objective**  
+Navigate to Dashboards → Example Dashboard
 
-By completing this exercise, you should be able to visualize trace-based metrics in **Grafana** using **Prometheus** as the data source.  
+You’ll be able to visualize metrics like request count, errors, and latency, including a panel showing errors in the goo function.
 
-> [!IMPORTANT]  
-> - View trace-based metrics in **Prometheus**.  
-> - Build a Grafana dashboard using **otel_collector_span** metrics.  
-> - Gain insights into application performance and error rates.  
-
-![Grafana-dashboard](Grafana-dashboard.png)  
+![Grafana-dashboard](Grafana-dashboard.png)
 
 ---
 
-## **Cleanup**
+## **Final Objective**
 
-To remove deployed resources and free up cluster resources, execute the following cleanup commands:
-
-```bash
-kubectl delete -f ../exercise8/deployment.yaml
-kubectl delete -f ./otel-collector.yaml
-kubectl delete -f ../exercise8/jaeger.yaml
-kubectl delete -f ./prometheus.yaml
-kubectl delete -f ./grafana.yaml
-kubectl delete ns application opentelemetry monitoring
-```
-
-This ensures that any deployed workloads are properly removed, preventing unnecessary resource consumption.
+You should now be able to:
+- View trace-derived metrics in **Prometheus**
+- Build a **Grafana dashboard** using OpenTelemetry metrics
+- Analyze application health and error rates using span-based telemetry
 
 ---
