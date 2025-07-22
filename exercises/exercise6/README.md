@@ -260,7 +260,9 @@ Access Grafana in your browser using the Minikube service command:
 minikube service grafana-service -n monitoring
 ```
 
-> **Expected Outcome**: After logging in with `admin/admin` (default password is also `admin`), you should see the default Grafana interface. Navigate to **Configuration \> Data Sources** to verify Prometheus is listed and correctly configured. You should also find the "Example Dashboard" automatically available under the Dashboards section.
+> **Expected Outcome**: After logging in with `admin/admin` (default password is also `admin`), you should see the default Grafana interface. Navigate to **Connections \> Data Sources** to verify Prometheus is listed and correctly configured. You should also find the "Example Dashboard" automatically available under the Dashboards section.
+
+> Verify Example Dashboard: Now, navigate to Dashboards in the left-hand menu. You should see an "Example Dashboard" listed. Click on it to load the dashboard, which includes a "CPU Usage" panel displaying metrics from Prometheus.
 
 -----
 
