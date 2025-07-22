@@ -126,8 +126,19 @@ This grants the necessary `get`, `list`, and `watch` permissions for resources r
 Deploy the updated Prometheus configuration:
 
 ```bash
-kubectl delete -f ../exercise5/prometheus.yaml
-kubectl apply -f prometheus.yaml
+kubectl delete -f ../exercise5/prometheus.yaml # Delete the old prometheus.yaml from exercise5
+kubectl apply -f prometheus.yaml # Apply the new prometheus.yaml from exercise7
+```
+
+**Note:** After applying the new configuration, Prometheus needs a moment to restart its pod. You can monitor its status to ensure it's ready before proceeding:
+
+```bash
+kubectl get pods -n monitoring -w
+```
+
+Wait until the `prometheus-deployment-...` pod shows `1/1 Running` and a recent `AGE`. Once it's ready, you can access the Prometheus UI:
+
+```bash
 minikube service prometheus-service -n monitoring
 ```
 
@@ -142,6 +153,8 @@ count({__name__=~".+"})
 ```
 
 ![Prometheus result](query2.png)
+
+> If the cAdvisor integration is working, you should see an increase in the number of metrics (e.g., 5000+), indicating successful collection of container-level metrics.
 
 ---
 
@@ -169,20 +182,38 @@ Deploy Grafana:
 
 ```bash
 kubectl apply -f ../exercise6/grafana.yaml
+```
+
+> Note: After applying the Grafana configuration, the pod needs a moment to become ready. You can monitor its status:
+
+```bash
+kubectl get pods -n monitoring -w
+```
+
+Wait until the grafana-deployment-... pod shows 1/1 Running. Once it's ready, you can access the Grafana UI:
+
+```bash
 minikube service grafana-service -n monitoring
 ```
 
-Log in to Grafana (`admin/admin`) and create a new panel:
+Log in to Grafana (`admin/admin`) and add a new panel to the existing dashboard:
 
-1. Navigate to **Dashboards** → **New Panel**.
-2. Select Prometheus as the data source.
-3. Enter this query in the editor:
+1.  Navigate to **Dashboards**.
+2.  Click on your existing dashboard, typically named "Example Dashboard" (or the name you previously assigned).
+3.  On the dashboard, click the **Edit** button at the top of the page.
+4.  Then, click the **Add** button at the top of the page, then select **Visualization**.
+5.  In the "Choose Data Source" dropdown, select **Prometheus**.
+6.  In the query editor section, you'll see "Query (Prometheus)". Click on the **Code** button (located next to the "Builder" button).
+7.  In the "Enter a PromQL query" text area, paste the following query:
 
-```promql
-sum(rate(container_cpu_usage_seconds_total[5m])) by (container_label_io_kubernetes_pod_name)
-```
+    ```promql
+    sum(rate(container_cpu_usage_seconds_total[5m])) by (container_label_io_kubernetes_pod_name)
+    ```
 
-4. Click **Apply** to view the graph.
+8.  Click **Run queries** to visualize the graph.
+9.  Add a meaningful name to your new panel in the "Title" field (e.g., "Pod CPU Usage").
+10.  Click **Save Dashboard** (usually found at the top right) to add the panel to the dashboard.
+11. Finally, click **Save** to confirm changes to your existing dashboard.
 
 ![Grafana static panel](grafana-1.png)
 
