@@ -70,17 +70,23 @@ Prometheus consists of the following components:
 
 ## Traditional Installation
 
-This section provides the traditional steps to install Prometheus:
+This section provides the traditional steps to install Prometheus on macOS using Homebrew:
 
-1.  Download the latest version from [Prometheus Releases](https://prometheus.io/download/).
-2.  Unpack the tarball and run the Prometheus binary.
-3.  Configure the `prometheus.yml` file with the list of targets to monitor.
-4.  Start Prometheus with the following command:
+1.  **Install Prometheus via Homebrew**:
     ```bash
-    ./prometheus --config.file=prometheus.yml
+    brew install prometheus
+    ```
+2.  **Locate Configuration File**: By default, Homebrew installs Prometheus configuration to `/opt/homebrew/etc/prometheus.yml` (for Apple Silicon) or `/usr/local/etc/prometheus.yml` (for Intel Macs). You can find the exact location by running `brew info prometheus`.
+3.  **Start Prometheus**:
+    ```bash
+    brew services start prometheus
+    ```
+    Alternatively, to run it once without backgrounding:
+    ```bash
+    prometheus --config.file=/opt/homebrew/etc/prometheus.yml # Adjust path if different
     ```
 
-In this exercise, we’ll focus on deploying Prometheus within a Minikube cluster using Kubernetes YAML configurations.
+In this exercise, we’ll focus on deploying Prometheus within a Minikube cluster using Kubernetes YAML configurations, which offers a cloud-native approach to monitoring.
 
 -----
 
@@ -195,22 +201,18 @@ Expose the Prometheus service using Minikube:
 minikube service prometheus-service -n monitoring
 ```
 
-> **Important Note on `minikube service`:**
-> If `minikube service` returns an `MK_UNIMPLEMENTED` error (e.g., related to QEMU's builtin network driver), it means this command is not compatible with your Minikube driver's current network configuration.
-> **You can still access Prometheus manually.**
->
-> 1.  **Get the NodePort**: Run `kubectl get service prometheus-service -n monitoring`. Look for `9090:<PORT>/TCP` in the output, where `<PORT>` is your dynamically assigned NodePort (e.g., `30090`).
-> 2.  **Get the Minikube IP**: Run `minikube ip`.
-> 3.  **Open in browser**: Navigate to `http://<MINIKUBE_IP>:<NODEPORT>` (replace `<MINIKUBE_IP>` and `<NODEPORT>` with the values you found).
-
 -----
 
 ## Running the Playbook
 
+While the previous steps guided you through applying Kubernetes configurations manually with `kubectl`, this section demonstrates a more **automated and scalable approach** using Ansible. This is where the principles of **Infrastructure as Code (IaC)** come into play, allowing you to define and manage your infrastructure (in this case, Prometheus on Kubernetes) through code.
+
+Ansible acts as an **orchestration tool**, taking the defined state in your YAML files (`prometheus.yaml` and `infra.yaml`) and applying it to your target environment. This ensures **repeatability and consistency**, meaning you can deploy Prometheus to any similar Minikube cluster with the same configuration simply by running this playbook. It also integrates seamlessly with version control, making your infrastructure deployments traceable and auditable.
+
 To deploy Prometheus using Ansible:
 
 1.  **Clarify the Dependency**
-    Ensure you have completed Exercise 4.1, as this exercise requires the `inventory.ini` file from the `exercise4.1/ansible_quickstart` directory.
+    Ensure you have completed Exercise 4.1, as this exercise requires the `inventory.ini` file from the `exercise4.1/ansible_quickstart` directory. This `inventory.ini` file tells Ansible to target your local machine.
 
 2.  **Run the Playbook**
     Execute the following command:
@@ -218,6 +220,8 @@ To deploy Prometheus using Ansible:
     ```bash
     ansible-playbook -i ../exercise4.1/ansible_quickstart/inventory.ini infra.yaml
     ```
+
+    This command tells Ansible to use the specified inventory file and execute the `infra.yaml` playbook, which in turn applies your Prometheus Kubernetes configurations.
 
 3.  **Verify the Prometheus Service**
     Confirm that the Prometheus service is running. If `minikube service` is compatible with your setup:
