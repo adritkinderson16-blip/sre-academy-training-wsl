@@ -2,15 +2,15 @@
 
 ## Table of Contents
 
-  - [Introduction to Docker Hub](https://www.google.com/search?q=%23introduction-to-docker-hub)
-  - [Creating a Docker Hub Account](https://www.google.com/search?q=%23creating-a-docker-hub-account)
-  - [Creating a Docker Repository](https://www.google.com/search?q=%23creating-a-docker-repository)
-  - [Pushing the Image to Docker Hub](https://www.google.com/search?q=%23pushing-the-image-to-docker-hub)
-      - [Verify the Local Image](https://www.google.com/search?q=%23verify-the-local-image)
-      - [Tag the Local Image](https://www.google.com/search?q=%23tag-the-local-image)
-      - [Push the Image to Docker Hub](https://www.google.com/search?q=%23push-the-image-to-docker-hub)
-  - [Running Remote Images](https://www.google.com/search?q=%23running-remote-images)
-  - [Final Objective](https://www.google.com/search?q=%23final-objective)
+- [Introduction to Docker Hub](#introduction-to-docker-hub)
+- [Creating a Docker Hub Account](#creating-a-docker-hub-account)
+- [Creating a Docker Repository](#creating-a-docker-repository)
+- [Pushing the Image to Docker Hub](#pushing-the-image-to-docker-hub)
+  - [Verify the Local Image](#verify-the-local-image)
+  - [Tag the Local Image](#tag-the-local-image)
+  - [Push the Image to Docker Hub](#push-the-image-to-docker-hub)
+- [Running Remote Images](#running-remote-images)
+- [Final Objective](#final-objective)
 
 -----
 
