@@ -80,11 +80,11 @@ To begin, navigate to the directory for Exercise 4:
 
 ```bash
 cd sre-academy-training/exercises/exercise4
-```
+````
 
 This directory contains the necessary YAML files for the deployment and service configuration.
 
----
+-----
 
 ## Install Minikube on macOS
 
@@ -102,11 +102,11 @@ brew install minikube
 
 If you see version output, you're good to continue.
 
----
+-----
 
 ## Starting Minikube with Podman
 
-Start Minikube with the Podman driver and container runtime:
+Start Minikube with the Podman driver and containerd runtime. This configuration is **recommended for macOS** as it ensures **compatibility with `minikube service`** and subsequent exercise requirements.
 
 ```bash
 minikube start --driver=podman --container-runtime=containerd
@@ -118,7 +118,7 @@ Verify the setup:
 minikube status
 ```
 
----
+-----
 
 ## Accessing the Kubernetes Dashboard
 
@@ -130,7 +130,7 @@ minikube dashboard
 
 > **Note:** Open a new terminal for further commands while the dashboard runs.
 
----
+-----
 
 ## Deploying the Application
 
@@ -146,38 +146,45 @@ The `service.yaml` exposes the application using a NodePort.
 
 ### Steps to Deploy
 
-1. Apply the Deployment:
-   ```bash
-   kubectl apply -f deployment.yaml
-   ```
+1.  Apply the Deployment:
 
-2. Apply the Service:
-   ```bash
-   kubectl apply -f service.yaml
-   ```
+    ```bash
+    kubectl apply -f deployment.yaml
+    ```
 
-3. Verify the Pods:
-   ```bash
-   kubectl get pods
-   ```
+2.  Apply the Service:
 
-4. Verify the Service:
-   ```bash
-   kubectl get service sre-abc-training-service
-   ```
+    ```bash
+    kubectl apply -f service.yaml
+    ```
 
----
+3.  Verify the Pods:
+
+    ```bash
+    kubectl get pods
+    ```
+
+4.  Verify the Service:
+
+    ```bash
+    kubectl get service sre-abc-training-service
+    ```
+
+-----
 
 ## Exploring the Application in the Dashboard
 
-1. Open the Minikube dashboard:
-   ```bash
-   minikube dashboard
-   ```
+1.  Open the Minikube dashboard:
 
-2. Explore:
-   - **Workloads > Deployments**: View the `sre-abc-training-app` deployment, replicas, and status.
-   - **Network > Services**: Review the `sre-abc-training-service`, its NodePort, and associated pods.
+    ```bash
+    minikube dashboard
+    ```
+
+2.  Explore:
+
+      - **Workloads \> Deployments**: View the `sre-abc-training-app` deployment, replicas, and status.
+      - **Network \> Services**: Review the `sre-abc-training-service`, its NodePort, and associated pods.
+
 
 ---
 

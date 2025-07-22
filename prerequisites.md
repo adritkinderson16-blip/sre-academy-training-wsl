@@ -17,34 +17,36 @@ This document explains how to prepare your local environment to run the exercise
 |---|---|---|
 | Minikube | `brew install minikube` | Install inside WSL |
 | QEMU | `brew install qemu` | Installed via apt in WSL |
+| Podman | `brew install podman` | Installed via apt in WSL |
 | kubectl | `brew install kubectl` | Install inside WSL |
 
 ---
 
 ## Setup on macOS
 
-1. **Install Minikube**
-   ```bash
-   brew install minikube
-   ```
-
-2.  **Install QEMU (virtualization engine)**
-
+1.  **Install Minikube**
     ```bash
-    brew install qemu
+    brew install minikube
+    ```
+
+2.  **Install QEMU (virtualization engine) and Podman**
+    ```bash
+    brew install qemu podman
     ```
 
 3.  **Install kubectl**
-
     ```bash
     brew install kubectl
     ```
 
-4.  **Start Minikube with QEMU**
-
+4.  **Start Minikube with Podman driver (Recommended for macOS)**
+    This configuration is generally stable and allows direct access to services.
     ```bash
-    minikube start --driver=qemu
+    minikube start --driver=podman --container-runtime=containerd
     ```
+    > **Note:** If you encounter issues with Podman or prefer QEMU, you can use the QEMU driver with specific networking:
+    > `minikube start --driver=qemu --network=socket_vmnet`
+    > This network configuration is required for `minikube service` to function correctly with QEMU. If you switch drivers or configurations, remember to run `minikube delete` first to avoid conflicts.
 
 5.  **Enable recommended addons**
 
@@ -54,7 +56,7 @@ This document explains how to prepare your local environment to run the exercise
     minikube addons enable dashboard
     ```
 
------
+---
 
 ## Setup on Windows
 
@@ -104,43 +106,43 @@ This document explains how to prepare your local environment to run the exercise
     minikube start --driver=kvm2
     ```
 
------
+---
 
 ## Verifying Installation
 
-  * Check cluster status:
+* Check cluster status:
 
     ```bash
     minikube status
     ```
 
-  * Validate node is ready:
+* Validate node is ready:
 
     ```bash
     kubectl get nodes
     ```
 
------
+---
 
 ## Troubleshooting
 
-  * If Minikube fails to start with QEMU:
+* If Minikube fails to start with QEMU:
 
-      * Try `--force` option
-      * Delete and restart: `minikube delete && minikube start --driver=qemu`
+    * Try `--force` option
+    * Delete and restart: `minikube delete && minikube start --driver=qemu`
 
-  * If using WSL and KVM is unavailable, try VirtualBox as fallback:
+* If using WSL and KVM is unavailable, try VirtualBox as fallback:
 
     ```bash
     minikube start --driver=virtualbox
     ```
 
------
+---
 
 ## See Also
 
-  * [Minikube Documentation](https://minikube.sigs.k8s.io/docs/)
-  * [Kubernetes CLI (kubectl)](https://kubernetes.io/docs/tasks/tools/)
-  * [WSL2 Setup Guide (Microsoft)](https://learn.microsoft.com/en-us/windows/wsl/install)
+* [Minikube Documentation](https://minikube.sigs.k8s.io/docs/)
+* [Kubernetes CLI (kubectl)](https://kubernetes.io/docs/tasks/tools/)
+* [WSL2 Setup Guide (Microsoft)](https://learn.microsoft.com/en-us/windows/wsl/install)
 
------
+---
