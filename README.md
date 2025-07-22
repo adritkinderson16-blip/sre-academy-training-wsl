@@ -10,29 +10,36 @@ This repository is part of IBM’s internal SRE Academy initiative. It applies s
 
 ## Getting Started
 
-Before beginning any exercise or topic, clone the repository to your local machine:
+Before beginning any exercise or topic, you have two options to get the repository content onto your local machine:
+
+### Option 1: Download as a ZIP File (Recommended for Students)
+
+This is the simplest method and does not require Git configuration or tokens.
+
+1.  Navigate to the repository in your web browser: `https://github.ibm.com/SRE-Academy/sre-academy-training.git`
+2.  Look for a green button named "**Code**". Click it.
+3.  Select "**Download ZIP**" from the dropdown menu.
+4.  Once downloaded, extract the ZIP file to your preferred location on your local machine.
+5.  Open your terminal or command prompt and navigate into the extracted directory:
+
+    ```bash
+    cd /path/to/extracted/sre-academy-training-main
+    ```
+
+    (Note: The extracted folder name might include a branch name like `-main` or a commit hash.)
+
+### Option 2: Clone the Repository (Requires Git Setup & Token/SSH)
+
+This method is for users who have Git configured and prefer to clone the repository, which is useful for contributing changes.
 
 ```bash
 git clone https://github.ibm.com/SRE-Academy/sre-academy-training.git
 cd sre-academy-training
-````
+```
 
 > 💡 Note: You must be logged into [https://github.ibm.com](https://github.ibm.com) with your IBM w3id to access this repository.
 
 This will give you access to all the exercises (located in the `exercises/` folder) and topics (located in the `topicX/` folders).
-
----
-
-## Prerequisites
-
-To run Kubernetes-based exercises locally, you’ll need a working Minikube environment with appropriate drivers and CLI tools.
-
-We recommend:
-
-* **macOS**: Use Minikube with the QEMU driver.
-* **Windows**: Use Minikube inside WSL2 with KVM or VirtualBox.
-
-> ⚠️ Windows support is not officially tested. See detailed setup steps and system notes in the [prerequisites.md](./prerequisites.md) file.
 
 ---
 
