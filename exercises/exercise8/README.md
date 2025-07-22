@@ -1,13 +1,14 @@
 # Instrumenting a Python Application with OpenTelemetry for Distributed Tracing
 
 ## **Table of Contents**
- - [Overview](#overview)
- - [Navigate to the Directory](#navigate-to-the-directory)
- - [Steps to Set Up](#steps-to-set-up)
- - [Deployment](#deployment)
- - [Tip for Infrastructure as Code (IaC) with Ansible](#tip-for-infrastructure-as-code-iac-with-ansible)
- - [Final Objective](#final-objective)
- - [Cleanup](#cleanup)
+- [Overview](#overview)
+- [Navigate to the Directory](#navigate-to-the-directory)
+- [Required Files](#required-files)
+- [Step 1: Review the Instrumented Python Application](#step-1-review-the-instrumented-python-application)
+- [Step 2: Deploy the OpenTelemetry Collector and Jaeger](#step-2-deploy-the-opentelemetry-collector-and-jaeger)
+- [Step 3: Run the Instrumented Application](#step-3-run-the-instrumented-application)
+- [Step 4: Automating with Ansible (Optional)](#step-4-automating-with-ansible-optional)
+- [Expected Results in Jaeger UI](#expected-results-in-jaeger-ui)
 
 ---
 
@@ -26,129 +27,137 @@ Jaeger is a distributed tracing platform used to **monitor microservices-based a
 Before starting, ensure you are in the correct directory:
 
 ```bash
-cd sre-abc-training/exercises/exercise8
-```
+cd sre-academy-training/exercises/exercise8
+````
 
 ---
 
 ## **Required Files**
-The necessary files for this exercise are already included in the repository.  
-You do **not** need to create them manually.  
+
+The necessary files for this exercise are already included in the repository.
+You do **not** need to create them manually.
 
 Files included:
-- `otel-collector.yaml`: Configuration for the OpenTelemetry Collector.
-- `jaeger.yaml`: Deployment configuration for Jaeger.
-- `deployment.yaml`: Deployment configuration for the Python application.
-- `app.py`: The instrumented Python application.
-- `Dockerfile`: The containerization script for the Python application.
+
+* `otel-collector.yaml`: Configuration for the OpenTelemetry Collector.
+* `jaeger.yaml`: Deployment configuration for Jaeger.
+* `deployment.yaml`: Deployment configuration for the Python application.
+* `app.py`: The instrumented Python application.
+* `Dockerfile`: The containerization script for the Python application.
 
 ---
 
-## **1. Instrumenting the Python Application**
-### **Modify the Python Application for Tracing**
-To enable tracing in the Python application:
+## **Step 1: Review the Instrumented Python Application**
 
-1. The required **OpenTelemetry libraries** are already included in the `Dockerfile`:
+This exercise comes with a **pre-instrumented Python application (`app.py`)** ready for distributed tracing. You do **not** need to modify these files manually for this exercise. The key instrumentation details are provided below for your understanding.
 
-   ```docker
-   RUN pip install flask \
-       opentelemetry-api \
-       opentelemetry-sdk \
-       opentelemetry-exporter-otlp-proto-grpc \
-       opentelemetry-instrumentation-flask
-   ```
+### **OpenTelemetry Libraries in `Dockerfile`:**
 
-2. The **Python application** is already instrumented to initialize OpenTelemetry tracing inside `app.py`:
+The necessary OpenTelemetry libraries for Flask instrumentation and OTLP (OpenTelemetry Protocol) gRPC export are already included:
 
-   ```python
-   from opentelemetry import trace
-   from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-   from opentelemetry.sdk.resources import Resource
-   from opentelemetry.sdk.trace import TracerProvider
-   from opentelemetry.sdk.trace.export import BatchSpanProcessor
+```docker
+RUN pip install flask \
+    opentelemetry-api \
+    opentelemetry-sdk \
+    opentelemetry-exporter-otlp-proto-grpc \
+    opentelemetry-instrumentation-flask
+```
 
-   # Define the service name
-   resource = Resource.create({"service.name": "sre-abc-training-app"})
+### **OpenTelemetry Initialization in `app.py`:**
 
-   # Set up the OpenTelemetry Collector endpoint
-   span_exporter = OTLPSpanExporter(
-       endpoint="otel-collector.opentelemetry.svc.cluster.local:4317",
-       insecure=True
-   )
+```python
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-   # Configure the tracer provider and processor
-   tracer_provider = TracerProvider(resource=resource)
-   span_processor = BatchSpanProcessor(span_exporter)
-   tracer_provider.add_span_processor(span_processor)
-   trace.set_tracer_provider(tracer_provider)
+# Define the service name
+resource = Resource.create({"service.name": "sre-abc-training-app"})
 
-   # Get a tracer instance
-   tracer = trace.get_tracer(__name__)
-   ```
+# Set up the OpenTelemetry Collector endpoint
+span_exporter = OTLPSpanExporter(
+    endpoint="otel-collector.opentelemetry.svc.cluster.local:4317", # Points to the OtelCollector service
+    insecure=True # Set to True if using an unencrypted connection
+)
 
----
+# Configure the tracer provider and processor
+tracer_provider = TracerProvider(resource=resource)
+span_processor = BatchSpanProcessor(span_exporter)
+tracer_provider.add_span_processor(span_processor)
+trace.set_tracer_provider(tracer_provider)
 
-## **2. Deploying the OpenTelemetry Collector**
-The **OtelCollector** will collect traces from the Python application and forward them to Jaeger.
+# Get a tracer instance for manual instrumentation (if needed)
+tracer = trace.get_tracer(__name__)
+```
 
-1. Apply the **OtelCollector** deployment:
+The application also uses:
 
-   ```bash
-   kubectl apply -f otel-collector.yaml
-   ```
-
-2. Verify that the pod is running:
-
-   ```bash
-   kubectl get pods -A | grep otel-collector
-   ```
+* `FlaskInstrumentor().instrument_app(app)` for auto-instrumentation of Flask routes
+* `OpenTelemetryMiddleware` for WSGI
+* Custom spans for `foo()`, `goo()`, and `zoo()` functions to demonstrate nested tracing and error capturing.
 
 ---
 
-## **3. Deploying Jaeger**
-Jaeger is used to visualize traces.
+## **Step 2: Deploy the OpenTelemetry Collector and Jaeger**
 
-1. Apply the **Jaeger** deployment:
+The **OtelCollector** will collect traces from the Python application and forward them to Jaeger, which is used to visualize traces.
 
-   ```bash
-   kubectl apply -f jaeger.yaml
-   ```
+1. Apply the OpenTelemetry Collector and Jaeger deployments:
 
-2. Verify that Jaeger is running:
+```bash
+kubectl apply -f otel-collector.yaml
+kubectl apply -f jaeger.yaml
+```
 
-   ```bash
-   kubectl get pods -n opentelemetry
-   ```
+2. Monitor pod status in the `opentelemetry` namespace:
 
-3. Access the **Jaeger UI**:
+```bash
+kubectl get pods -n opentelemetry -w
+```
 
-   ```bash
-   minikube service jaeger -n opentelemetry
-   ```
+Wait until both the `otel-collector-...` and `jaeger-...` pods show `1/1 Running`.
+
+3. Access the Jaeger UI:
+
+```bash
+minikube service jaeger-service -n opentelemetry
+```
+
+> 💡 **Note:** If you see a message about "no node port" for the `jaeger` service, that’s expected. Use `jaeger-service`, which exposes the UI externally.
 
 ---
 
-## **4. Running the Application**
-Now that everything is deployed, you can start the instrumented **Python application**.
+## **Step 3: Run the Instrumented Application**
+
+Once the tracing backend is ready, deploy your Python app:
 
 1. Apply the deployment:
 
-   ```bash
-   kubectl apply -f deployment.yaml
-   ```
+```bash
+kubectl apply -f deployment.yaml
+```
 
-2. Check the status of the pods:
+> ⚠️ **Note:** If you encounter a `nodePort` conflict (`provided port is already allocated`), do one of the following:
+>
+> * Change `nodePort` in `deployment.yaml` (e.g., use `30009`)
+> * Ensure previous services are deleted before starting
 
-   ```bash
-   kubectl get pods -A
-   ```
+2. Confirm the app is running and traffic is being generated:
+
+```bash
+kubectl get pods -n application -w
+```
+
+Wait for the app pod (`sre-abc-training-app-...`) to show `1/1 Running`, and look for `store-caller-...` job pods completing, which means traces are being sent.
 
 ---
 
-## **5. Automating with Ansible (Optional)**
-To automate the deployment process, you can use an **Ansible playbook**.
+## **Step 4: Automating with Ansible (Optional)**
 
-This playbook is already included in the repository and applies all required configurations:
+To automate the deployment process, you can use the included **Ansible playbook**.
+
+### Example playbook (`deploy.yaml`):
 
 ```yaml
 ---
@@ -166,7 +175,7 @@ This playbook is already included in the repository and applies all required con
       command: kubectl apply -f deployment.yaml
 ```
 
-Run the playbook:
+Run the playbook with:
 
 ```bash
 ansible-playbook -i inventory.ini deploy.yaml
@@ -174,38 +183,15 @@ ansible-playbook -i inventory.ini deploy.yaml
 
 ---
 
-## **Final Objective**
-By completing this exercise, you will have:
-✅ Instrumented a Python application with OpenTelemetry  
-✅ Configured and deployed the OpenTelemetry Collector  
-✅ Deployed Jaeger to visualize traces  
-✅ Automated the process using Ansible (optional)  
+## **Expected Results in Jaeger UI**
 
-### **Expected Results in Jaeger UI**
-- **Trace Dashboard**: Shows received traces from the Python application  
-  ![jaeger-dashboard](jaeger-dashboard.png)  
+* **Trace Dashboard**
+  ![jaeger-dashboard](jaeger-dashboard.png)
 
-- **Viewing a Specific Trace**  
-  ![jaeger-trace](jaeger-trace.png)  
+* **Viewing a Specific Trace**
+  ![jaeger-trace](jaeger-trace.png)
 
-- **Tracing an Error**  
-  ![jaeger-trace-with-error](jaeger-trace-with-error.png)  
-
----
-
-## **Cleanup**
-To free up resources, **delete the deployed components**:
-
-```bash
-kubectl delete -f deployment.yaml
-kubectl delete -f otel-collector.yaml
-kubectl delete -f jaeger.yaml
-```
-
-If using Minikube, stop the cluster:
-
-```bash
-minikube stop
-```
+* **Tracing an Error**
+  ![jaeger-trace-with-error](jaeger-trace-with-error.png)
 
 ---

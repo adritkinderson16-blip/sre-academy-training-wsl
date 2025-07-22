@@ -36,7 +36,7 @@ spec:
   ports:
   - port: 5000
     targetPort: 5000
-    nodePort: 30007 # You can specify a different NodePort if desired
+    nodePort: 30009 # You can specify a different NodePort if desired
 ---
 apiVersion: batch/v1
 kind: CronJob
