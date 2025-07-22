@@ -114,7 +114,7 @@ Update Prometheus to scrape cAdvisor metrics by adding this job definition in `p
 Apply the required RBAC configuration to allow Prometheus to access pod and endpoint metadata in the `monitoring` namespace:
 
 ```bash
-kubectl apply -f prometheus-rbac.yaml
+kubectl apply -f prometheus-rbac-cluster.yaml
 ```
 
 This grants the necessary `get`, `list`, and `watch` permissions for resources required by Prometheus service discovery.
