@@ -1,0 +1,25 @@
+# prometheus-rbac-cluster.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole # <--- Change from Role to ClusterRole
+metadata:
+  name: prometheus-pod-reader-cluster # Use a distinct name
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["endpoints"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding # <--- Change from RoleBinding to ClusterRoleBinding
+metadata:
+  name: prometheus-pod-reader-binding-cluster # Use a distinct name
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole # <--- Reference the ClusterRole
+  name: prometheus-pod-reader-cluster
+subjects:
+- kind: ServiceAccount
+  name: default # The default ServiceAccount in the 'monitoring' namespace
+  namespace: monitoring # The namespace of the ServiceAccount
