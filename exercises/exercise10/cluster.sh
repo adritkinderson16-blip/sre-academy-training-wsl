@@ -1,100 +1,140 @@
 #!/bin/bash
 
-# Exit immediately if a command exits with a non-zero status.
+# Exit on failure (controlled via safe_run), but allow resilience elsewhere.
 set -e
 
-echo "-------------------------------------------------------------------------"
-echo "Performing full cleanup of Minikube, Podman, and Colima environments..."
-echo "-------------------------------------------------------------------------"
-# Delete Minikube cluster (all profiles)
-minikube delete --all || true
+# ----------------------
+# Utility Functions
+# ----------------------
 
-# Stop and remove Podman machine if it exists
+log() {
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
+}
+
+safe_run() {
+  "$@" || log "Command failed: $*"
+}
+
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+ensure_tool() {
+  local tool="$1"
+  if command_exists "$tool"; then
+    log "$tool is installed."
+  else
+    log "$tool is not installed."
+    if command_exists brew; then
+      log "Installing $tool via Homebrew..."
+      brew install "$tool" || log "Failed to install $tool"
+    else
+      log "Homebrew is missing. Please install it from https://brew.sh/"
+      exit 1
+    fi
+  fi
+}
+
+start_if_not_running() {
+  local svc="$1"
+  if command_exists "$svc"; then
+    "$svc" status >/dev/null 2>&1 || {
+      log "Starting $svc..."
+      safe_run "$svc" start
+      sleep 5
+    }
+  else
+    log "Cannot start $svc — binary not found."
+  fi
+}
+
+pause() {
+  log "Waiting for $1 seconds..."
+  sleep "$1"
+}
+
+# -------------------------------
+# Toolchain Check (before anything else)
+# -------------------------------
+log "Checking toolchain dependencies..."
+for tool in colima podman minikube kubectl docker; do
+  ensure_tool "$tool"
+done
+pause 2
+
+# -------------------------------
+# Full Environment Cleanup
+# -------------------------------
+log "Performing full cleanup of Minikube, Podman, and Colima environments..."
+safe_run minikube delete --all
+
 if podman machine list | grep -q "podman-machine-default"; then
-  podman machine stop || true
-  podman machine rm --force || true
+  safe_run podman machine stop
+  safe_run podman machine rm --force
 fi
 
-# Stop and delete Colima instance
-colima stop || true
-colima delete || true
+safe_run colima stop
+safe_run colima delete --force
+pause 5
 
-sleep 5; # Give some time for deletion to propagate
-echo "Cleanup complete. Waiting for 5 seconds..."
+# -------------------------------
+# Startup Phase
+# -------------------------------
+log "Initializing and Starting Colima (for Minikube Docker driver)..."
+start_if_not_running colima
+safe_run colima start --cpu 2 --memory 2048 --disk 100
+pause 5
 
-echo "-------------------------------------------------------------------------"
-echo "Initializing and Starting Colima (for Minikube Docker driver)..."
-echo "-------------------------------------------------------------------------"
-# Start Colima with reduced memory to accommodate system limits
-# Defaulting to 2GB (2048MB), which is generally safer for 8GB RAM Macs.
-# You can increase this if your system has more available RAM (e.g., --memory 3072 for 3GB)
-colima start --cpu 2 --memory 2048 --disk 100
+log "Starting Minikube with Docker driver..."
+safe_run minikube start --driver=docker
+pause 5
 
-sleep 5; # Give Colima time to settle
-echo "Colima started. Waiting for 5 seconds..."
+log "Creating log directory inside Minikube VM..."
+safe_run minikube ssh "sudo mkdir -p /data/sre-app/logs && sudo chmod 777 /data/sre-app/logs"
+pause 5
 
-echo "-------------------------------------------------------------------------"
-echo "Starting Minikube using the Docker driver..."
-echo "-------------------------------------------------------------------------"
-minikube start --driver=docker
+# -------------------------------
+# Kubernetes Cluster Cleanup
+# -------------------------------
+log "Cleaning up Kubernetes cluster..."
+safe_run kubectl delete ns application opentelemetry monitoring --ignore-not-found=true
+safe_run kubectl delete pvc --all --ignore-not-found=true
+safe_run kubectl delete pv --all --ignore-not-found=true
+pause 5
 
-sleep 5; # Give Minikube time to settle
-echo "Minikube started. Waiting for 5 seconds..."
+# -------------------------------
+# Docker Image Build
+# -------------------------------
+log "Building Docker image..."
+safe_run docker build -t cguillenmendez/sre-abc-training-python-app:latest .
+safe_run docker tag cguillenmendez/sre-abc-training-python-app:latest cguillenmendez/sre-abc-training-python-app:0.0.23
+pause 5
 
-echo "-------------------------------------------------------------------------"
-echo "Creating /data/sre-app/logs directory in Minikube VM..."
-echo "-------------------------------------------------------------------------"
-# Create the directory and set permissions inside the Minikube VM
-minikube ssh "sudo mkdir -p /data/sre-app/logs && sudo chmod 777 /data/sre-app/logs"
+# -------------------------------
+# Kubernetes Deployment
+# -------------------------------
+log "Applying Kubernetes configurations..."
+for file in \
+  ./storage.yaml \
+  ./deployment.yaml \
+  ./otel-collector.yaml \
+  ../exercise8/jaeger.yaml \
+  ../exercise9/prometheus.yaml \
+  ./grafana-loki.yaml \
+  ./grafana.yaml \
+  ./prometheus-rbac-cluster.yaml; do
+    safe_run kubectl apply -f "$file"
+done
+pause 5
 
-sleep 5; # Give Minikube time to apply changes
-echo "Log directory created. Waiting for 5 seconds..."
+# -------------------------------
+# Pod Initialization Wait
+# -------------------------------
+log "Waiting for pod readiness..."
+safe_run kubectl wait --for=condition=Ready pods --all --all-namespaces --timeout=120s || log "Some pods failed to become Ready"
 
-echo "-------------------------------------------------------------------------"
-echo "Starting cleanup of existing Kubernetes resources within Kubernetes cluster (if any)..."
-echo "-------------------------------------------------------------------------"
-# Delete namespaces and PVCs/PVs, ignoring errors if they don't exist
-kubectl delete ns application opentelemetry monitoring --ignore-not-found=true || true
-kubectl delete pvc --all --ignore-not-found=true || true
-kubectl delete pv --all --ignore-not-found=true || true
+safe_run kubectl get pods -A
+log "Script finished. Check Grafana, Prometheus, Jaeger, and logs for full status."
 
-sleep 5; # Give time for deletion to propagate
-echo "Waiting 5 seconds for cleanup to propagate..."
-
-
-echo "-------------------------------------------------------------------------"
-echo "Building application image with Docker (Colima)..."
-echo "-------------------------------------------------------------------------"
-# Build the Docker images. Since Minikube is using the Colima-provided Docker daemon,
-# these images will be directly available to Minikube.
-docker build -t cguillenmendez/sre-abc-training-python-app:latest .
-docker build -t cguillenmendez/sre-abc-training-python-app:0.0.23 .
-
-sleep 5; # For consistency, though build is synchronous
-echo "Image built. Waiting for 5 seconds..."
-
-echo "-------------------------------------------------------------------------"
-echo "Applying new Kubernetes configurations..."
-echo "-------------------------------------------------------------------------"
-kubectl apply -f ./storage.yaml
-kubectl apply -f ./deployment.yaml
-kubectl apply -f ./otel-collector.yaml
-kubectl apply -f ../exercise8/jaeger.yaml # Path relative to current directory
-kubectl apply -f ../exercise9/prometheus.yaml # Path relative to current directory
-kubectl apply -f ./grafana-loki.yaml
-kubectl apply -f ./grafana.yaml
-kubectl apply -f ./prometheus-rbac-cluster.yaml # Ensure RBAC for Prometheus is applied
-
-sleep 5; # Give Kubernetes API server time to process
-echo "Kubernetes configurations applied. Waiting for 5 seconds..."
-
-echo "-------------------------------------------------------------------------"
-echo "Waiting 30 seconds for pods to start and getting final status..."
-echo "-------------------------------------------------------------------------"
-sleep 30; # Give pods ample time to start, pull images, etc.
-kubectl get pods -A
-echo "Initial pod status retrieved."
-
-echo "-------------------------------------------------------------------------"
-echo "Script finished. Please check logs and UIs for full status."
-echo "-------------------------------------------------------------------------"
+log "Opening Grafana UI in your browser..."
+minikube service grafana-service -n monitoring
