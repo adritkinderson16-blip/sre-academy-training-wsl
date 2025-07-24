@@ -2,19 +2,19 @@
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Prerequisites](#prerequisites)
-- [Understanding the Setup](#understanding-the-setup)
-  - [Application Logging with OpenTelemetry](#application-logging-with-opentelemetry)
-  - [Shared Log Volume Configuration](#shared-log-volume-configuration)
-  - [OpenTelemetry Collector Configuration](#opentelemetry-collector-configuration)
-  - [Grafana Loki Setup](#grafana-loki-setup)
-  - [Prometheus RBAC Setup](#prometheus-rbac-setup)
-  - [Grafana Integration (Datasource & Dashboard)](#grafana-integration-datasource--dashboard)
-- [Execution Steps](#execution-steps)
-- [Verification](#verification)
+* [Overview](#overview)
+* [Understanding the Setup](#understanding-the-setup)
 
------
+  * [Application Logging with OpenTelemetry](#application-logging-with-opentelemetry)
+  * [Shared Log Volume Configuration](#shared-log-volume-configuration)
+  * [OpenTelemetry Collector Configuration](#opentelemetry-collector-configuration)
+  * [Grafana Loki Setup](#grafana-loki-setup)
+  * [Prometheus RBAC Setup](#prometheus-rbac-setup)
+  * [Grafana Integration (Datasource & Dashboard)](#grafana-integration-datasource--dashboard)
+* [Execution Steps](#execution-steps)
+* [Verification](#verification)
+
+---
 
 ## **Overview**
 
@@ -22,11 +22,11 @@ In this exercise, we will enable **logging for a Python application** and integr
 
 The key components of this setup are:
 
-  - **Python Application Logging**: Configured to write logs to `/app/logs/sre-app.log` within its container.
-  - **Persistent Storage (PVC + PV)**: Ensures logs are available and shared between the application and the OpenTelemetry Collector.
-  - **OpenTelemetry Collector**: Reads logs from the shared volume and forwards them to **Loki**.
-  - **Grafana Loki**: Stores logs and provides an interface to query them.
-  - **Grafana Dashboard**: Visualizes application logs and provides insights, especially for errors.
+* **Python Application Logging**: Configured to write logs to `/app/logs/sre-app.log` within its container.
+* **Persistent Storage (PVC + PV)**: Ensures logs are available and shared between the application and the OpenTelemetry Collector.
+* **OpenTelemetry Collector**: Reads logs from the shared volume and forwards them to **Loki**.
+* **Grafana Loki**: Stores logs and provides an interface to query them.
+* **Grafana Dashboard**: Visualizes application logs and provides insights, especially for errors.
 
 By the end of this exercise, you will be able to analyze application logs in **Grafana** using Loki as the log backend.
 
@@ -34,15 +34,7 @@ By the end of this exercise, you will be able to analyze application logs in **G
 
 The configurations in this exercise primarily correspond to the blue square in the diagram above, focusing on the logging pipeline.
 
------
-
-## **Prerequisites**
-
-Before you begin, ensure you have the following installed and configured on your system:
-
-  * **Colima**: A container runtime (like Docker Desktop) for macOS/Linux, configured to provide a Docker daemon. Minikube will use this for its `docker` driver.
-
------
+---
 
 ## **Understanding the Setup**
 
@@ -52,158 +44,127 @@ This section describes the key configuration changes and components involved in 
 
 The Python application's code (`app.py`) has been modified to:
 
-  * Use standard Python `logging`.
-  * Direct logs to `./logs/sre-app.log` inside the container.
-  * Instrument logging using `opentelemetry-instrumentation-logging` to automatically export logs via OTLP (OpenTelemetry Protocol).
+* Use standard Python `logging`.
+* Direct logs to `./logs/sre-app.log` inside the container.
+* Instrument logging using `opentelemetry-instrumentation-logging` to automatically export logs via OTLP (OpenTelemetry Protocol).
 
 The `Dockerfile` is adjusted to:
 
-  * Install the `opentelemetry-instrumentation-logging` library.
-  * Create the `/app/logs` directory inside the image and set appropriate permissions to ensure the application can write logs.
+* Install the `opentelemetry-instrumentation-logging` library.
+* Create the `/app/logs` directory inside the image and set appropriate permissions to ensure the application can write logs.
 
-[Checkout the full `app.py` example here](https://www.google.com/search?q=./app.py)
-[Checkout the full `Dockerfile` example here](https://www.google.com/search?q=./Dockerfile)
+> See: `app.py` and `Dockerfile` in this directory.
 
 ### **Shared Log Volume Configuration**
 
 To allow both the application and the OpenTelemetry Collector to access the same log file, a shared volume is used:
 
-  * **Minikube Host Directory**: A directory `/data/sre-app/logs` is created on the Minikube VM's host filesystem. This directory acts as the shared location.
-  * **Persistent Volumes (PVs)**: Two `hostPath` Persistent Volumes (`log-pv-1` and `log-pv-2`) are defined, pointing to the `/data/sre-app/logs` directory on the Minikube node.
-  * **Persistent Volume Claims (PVCs)**:
-      * `log-pvc` in the `application` namespace claims `log-pv-1` and is mounted into the application's container at `/app/logs`.
-      * `log-pvc` in the `opentelemetry` namespace claims `log-pv-2` and is mounted into the OpenTelemetry Collector's container at `/var/log/sre-app`.
+* **Minikube Host Directory**: A directory `/data/sre-app/logs` is created on the Minikube VM's host filesystem. This directory acts as the shared location.
+* **Persistent Volumes (PVs)**: Two `hostPath` Persistent Volumes (`log-pv-1` and `log-pv-2`) are defined, pointing to the `/data/sre-app/logs` directory on the Minikube node.
+* **Persistent Volume Claims (PVCs)**:
 
-[Checkout the full `storage.yaml` example here](https://www.google.com/search?q=./storage.yaml)
-[Checkout the relevant part of `deployment.yaml` for application volume mounts here](https://www.google.com/search?q=./deployment.yaml)
+  * `log-pvc` in the `application` namespace claims `log-pv-1` and is mounted into the application's container at `/app/logs`.
+  * `log-pvc` in the `opentelemetry` namespace claims `log-pv-2` and is mounted into the OpenTelemetry Collector's container at `/var/log/sre-app`.
+
+> See: `storage.yaml` and `deployment.yaml`.
 
 ### **OpenTelemetry Collector Configuration**
 
 The OpenTelemetry Collector (`otel-collector.yaml`) is configured to:
 
-  * Mount the shared log volume (`log-pvc` from `opentelemetry` namespace) at `/var/log/sre-app`.
-  * Use a `filelog` receiver to tail log files within `/var/log/sre-app/*.log`.
-  * Utilize an `otlphttp/loki` exporter to forward collected logs to the Loki service.
-  * Configure a `logs` pipeline that routes logs from the `filelog` receiver to the `otlphttp/loki` exporter.
+* Mount the shared log volume (`log-pvc` from `opentelemetry` namespace) at `/var/log/sre-app`.
+* Use a `filelog` receiver to tail log files within `/var/log/sre-app/*.log`.
+* Utilize an `otlphttp/loki` exporter to forward collected logs to the Loki service.
+* Configure a `logs` pipeline that routes logs from the `filelog` receiver to the `otlphttp/loki` exporter.
 
-[Checkout the full `otel-collector.yaml` example here](https://www.google.com/search?q=./otel-collector.yaml)
+> See: `otel-collector.yaml`.
 
 ### **Grafana Loki Setup**
 
 Grafana Loki is deployed as the centralized log aggregation system. The OpenTelemetry Collector sends logs to Loki, making them available for querying by Grafana.
 
-[Apply `Loki deployment` settings from](https://www.google.com/search?q=./grafana-loki.yaml)
+> See: `grafana-loki.yaml`.
 
 ### **Prometheus RBAC Setup**
 
 For Prometheus to effectively discover and scrape metrics from all components across the cluster (including `cadvisor` and other Kubernetes-internal targets), it requires specific cluster-wide permissions. This is granted via:
 
-  * A `ClusterRole` named `prometheus-pod-reader-cluster` with `get`, `list`, and `watch` permissions on `pods` and `endpoints`.
-  * A `ClusterRoleBinding` that binds this `ClusterRole` to the `default` ServiceAccount in the `monitoring` namespace, which the Prometheus pod uses.
+* A `ClusterRole` named `prometheus-pod-reader-cluster` with `get`, `list`, and `watch` permissions on `pods` and `endpoints`.
+* A `ClusterRoleBinding` that binds this `ClusterRole` to the `default` ServiceAccount in the `monitoring` namespace, which the Prometheus pod uses.
 
-[Checkout the full `prometheus-rbac-cluster.yaml` example here](https://www.google.com/search?q=./prometheus-rbac-cluster.yaml)
+> See: `prometheus-rbac-cluster.yaml`.
 
 ### **Grafana Integration (Datasource & Dashboard)**
 
 Grafana is configured to:
 
-  * Add a new `Loki` datasource, pointing to `http://loki.opentelemetry.svc.cluster.local:3100`.
-  * Include an example dashboard that features a panel specifically designed to display error logs by querying Loki for entries containing `"goo encountered an error:"`.
+* Add a new `Loki` datasource, pointing to `http://loki.opentelemetry.svc.cluster.local:3100`.
+* Include an example dashboard that features a panel specifically designed to display error logs by querying Loki for entries containing `"goo encountered an error:"`.
 
-[Checkout the full `grafana.yaml` example here](https://www.google.com/search?q=./grafana.yaml)
+> The panel titled **“Error Occurrences for Unknown Service”** is part of the Example Dashboard in Grafana and helps identify error trends.
 
------
-
-## **Execution Steps**
-
-Follow these steps to deploy and set up the entire lab environment from scratch:
-
-1.  **Navigate to the Exercise Directory:**
-
-    ```bash
-    cd sre-academy-training/exercises/exercise10
-    ```
-
-2.  **Run the Deployment Script:**
-    This script will perform a complete cleanup of previous Minikube/Colima states, start a fresh Minikube cluster, build your application image, and deploy all Kubernetes resources (namespaces, persistent storage, application, OpenTelemetry Collector, Loki, Prometheus, Jaeger, Grafana, and necessary RBAC).
-
-    ```bash
-    ./cluster.sh
-    ```
-
-    *This script may take several minutes to complete, especially on the first run, as it initializes environments and downloads images.*
-
------
-
-## **Verification**
-
-Once the `cluster.sh` script reports all pods are running and has finished, verify the setup:
-
-1.  **Check Pod Status:**
-    Ensure all pods across all relevant namespaces are `Running` and `Ready` (`1/1`).
-
-    ```bash
-    kubectl get pods -A
-    ```
-
-2.  **Access Web UIs:**
-    Use `minikube service` to open the respective UIs in your default web browser.
-
-      * **Grafana UI:** (Use `admin`/`admin` for login)
-        ```bash
-        minikube service grafana-service -n monitoring
-        ```
-      * **Prometheus UI:** (Check `Status -> Targets` to ensure all targets, including `cadvisor`, are `UP`)
-        ```bash
-        minikube service prometheus-service -n monitoring
-        ```
-      * **Jaeger UI:**
-        ```bash
-        minikube service jaeger -n opentelemetry
-        ```
-
-3.  **Query Data in Grafana Explorer:**
-
-      * **For Loki (Logs):**
-
-        1.  In Grafana, navigate to the **Explore** section.
-        2.  Select the **`Loki`** datasource from the dropdown.
-        3.  Enter the following query to view application logs:
-            ```promql
-            {job="kubernetes-pods", app="sre-abc-training-app"}
-            ```
-        4.  Click **"Run query"**. You should see a stream of logs from your Python application.
-
-      * **For Prometheus (Metrics):**
-
-        1.  In Grafana, navigate to the **Explore** section.
-        2.  Select the **`Prometheus`** datasource from the dropdown.
-        3.  Try these queries:
-              * **Check application scrape status:**
-                ```promql
-                up{app="sre-abc-training-app"}
-                ```
-              * **View total HTTP requests:**
-                ```promql
-                flask_http_request_duration_seconds_count
-                ```
-        4.  Click **"Run query"**. You should see graphs corresponding to your application's metrics.
-
-        Additionally, you can visualize error occurrences in a **graph format**:
+> See: `grafana.yaml`.
 
 ---
 
-## **Final Objective**  
+## **Execution Steps**
 
-By completing this exercise, you should be able to:  
-> - View **trace-based logs** in **Grafana**.  
-> - Use **Loki** as a centralized logging system.  
-> - Identify and filter **error logs** in **Grafana**.  
+1. **Navigate to the Exercise Directory:**
 
-![Errors-logs-panel-at-grafana.png](errors-logs-panel-at-grafana.png)  
+   ```bash
+   cd sre-academy-training/exercises/exercise10
+   ```
 
-Additionally, you can visualize error occurrences in a **graph format**:  
+2. **Run the Deployment Script:**
 
-![errors-logs-panel-at-grafana-graph](errors-logs-panel-at-grafana-graph.png)
+   This script will perform a complete cleanup of previous Minikube/Colima states, start a fresh Minikube cluster, build your application image, and deploy all Kubernetes resources.
 
+   ```bash
+   ./cluster.sh
+   ```
+
+   *Note: This may take several minutes on the first run.*
+
+---
+
+## **Validate Logs in Grafana (Loki)**
+
+1. Go to **Explore** in the Grafana sidebar.
+
+2. Select the **`Loki`** data source from the dropdown.
+
+3. In the query field, paste the following code:
+
+   ```logql
+   {service_name="unknown_service"} |= "This message should"
+   ```
+
+4. Click **Run query**.
+
+You should now see logs for all levels: `DEBUG`, `INFO`, `WARNING`, and `ERROR` — confirming that Loki is collecting logs from your app.
+
+---
+
+## **Final Objective**
+
+By completing this exercise, you should be able to:
+
+* View **trace-based logs** using **Grafana Explore**.
+* Use **Loki** as a centralized log aggregator.
+* Filter and identify logs by **log level** (e.g., `debug`, `info`, `warning`, `error`).
+* Analyze log **volume and frequency over time** using built-in visualizations.
+
+### Example Output
+
+* **Log Volume Graph**
+
+  This graph displays the volume of logs over time, grouped by severity. It helps visualize when peaks in logging activity occur and whether specific levels (like `ERROR`) spike unexpectedly.
+
+  ![Errors-logs-panel-at-grafana.png](errors-logs-panel-at-grafana.png)
+
+* **Logs Table with Highlighted Entries**
+
+  This panel shows a list of structured logs captured by Loki. You can see multiple log levels (`DEBUG`, `INFO`, `WARNING`, `ERROR`) with the message:
+
+  ![errors-logs-panel-at-grafana-graph](errors-logs-panel-at-grafana-graph.png)
 ---
