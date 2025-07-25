@@ -10,36 +10,38 @@ This repository is part of IBM’s internal SRE Academy initiative. It applies s
 
 ## Getting Started
 
-Before beginning any exercise or topic, you have two options to get the repository content onto your local machine:
+Before working on any exercise or topic, make sure to set up the required tools. We've prepared a step-by-step installation guide for both macOS and Windows (WSL2).
+
+👉 **[Start with the Tool Installation Guide](./installation.md)**
+
+You’ll find instructions to install Python, Docker, Colima, Minikube, kubectl, and other essentials depending on your operating system.
+
+Once your environment is ready, get the repository onto your machine using one of the following options:
 
 ### Option 1: Download as a ZIP File (Recommended for Students)
 
 This is the simplest method and does not require Git configuration or tokens.
 
-1.  Navigate to the repository in your web browser: `https://github.ibm.com/SRE-Academy/sre-academy-training.git`
-2.  Look for a green button named "**Code**". Click it.
-3.  Select "**Download ZIP**" from the dropdown menu.
-4.  Once downloaded, extract the ZIP file to your preferred location on your local machine.
-5.  Open your terminal or command prompt and navigate into the extracted directory:
+1. Navigate to the repository: `https://github.ibm.com/SRE-Academy/sre-academy-training.git`
+2. Click the green "**Code**" button.
+3. Select "**Download ZIP**".
+4. Extract the ZIP to your preferred location.
+5. Open your terminal and navigate to the extracted folder:
 
-    ```bash
-    cd /path/to/extracted/sre-academy-training-main
-    ```
+   ```bash
+   cd /path/to/extracted/sre-academy-training-main
+   ```
 
-    (Note: The extracted folder name might include a branch name like `-main` or a commit hash.)
+> ⚠️ The folder name may include `-main` or a commit hash.
 
 ### Option 2: Clone the Repository (Requires Git Setup & Token/SSH)
-
-This method is for users who have Git configured and prefer to clone the repository, which is useful for contributing changes.
 
 ```bash
 git clone https://github.ibm.com/SRE-Academy/sre-academy-training.git
 cd sre-academy-training
 ```
 
-> 💡 Note: You must be logged into [https://github.ibm.com](https://github.ibm.com) with your IBM w3id to access this repository.
-
-This will give you access to all the exercises (located in the `exercises/` folder) and topics (located in the `topicX/` folders).
+> 🔐 You must be logged into [https://github.ibm.com](https://github.ibm.com) with your IBM w3id to access the repository.
 
 ---
 
@@ -96,11 +98,11 @@ This will give you access to all the exercises (located in the `exercises/` fold
 
 ## Learning Path
 
-1. **Start with the Topics (Topic 0 to Topic 6):**
+1. **Start with the Topics (Topic 0 to Topic 6)**
    These foundational concepts are essential for understanding SRE principles before diving into practical labs.
 
-2. **Proceed Through the Exercises Sequentially (Exercise 1 to Exercise 19):**
-   The exercises build on each other, guiding you from application development and packaging to full-stack monitoring, automation, and resilience engineering.
+2. **Proceed Through the Exercises Sequentially (Exercise 1 to Exercise 19)**
+   Each exercise builds upon the previous one, gradually introducing new tools and concepts related to monitoring, automation, resiliency, and GitOps.
 
 ---
 
@@ -110,7 +112,7 @@ By completing all topics and exercises, you will:
 
 * Learn and apply key SRE concepts in real-world labs.
 * Deploy a containerized application and set up monitoring and alerting.
-* Automate infrastructure management using tools like Ansible, Helm, and Terraform.
+* Automate infrastructure using tools like Ansible, Helm, and Terraform.
 * Practice GitOps with ArgoCD and CI/CD with GitHub Actions.
 * Run chaos experiments to enhance system resilience.
 * Manage tasks using GitHub Projects with a production-oriented mindset.
@@ -119,9 +121,9 @@ By completing all topics and exercises, you will:
 
 ## Notes
 
-* This repository is part of a practical training series developed for the SRE Academy and SRE team onboarding.
-* It is optimized for environments like Minikube but can be adapted to other Kubernetes setups.
-* Contributions and improvements are welcome. If you encounter issues or have suggestions, please open a pull request or GitHub issue.
+* This repository is part of a practical training series developed for SRE onboarding and the IBM SRE Academy.
+* Minikube (with Docker) is used to simulate Kubernetes environments; Colima and WSL2 are supported as local Docker runtimes.
+* Please follow the [installation instructions](./installation.md) **before the first class** to avoid setup issues during live sessions.
 
 Happy learning and implementing SRE best practices!
 
