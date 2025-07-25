@@ -2,15 +2,15 @@
 
 ## Table of Contents
 
-  - [Introduction](https://www.google.com/search?q=%23introduction)
-  - [What is Docker?](https://www.google.com/search?q=%23what-is-docker)
-  - [What is Podman?](https://www.google.com/search?q=%23what-is-podman)
-  - [Dockerfile Explanation](https://www.google.com/search?q=%23dockerfile-explanation)
-  - [Prerequisites](https://www.google.com/search?q=%23prerequisites)
-  - [Building the Container Image](https://www.google.com/search?q=%23building-the-container-image)
-  - [Running the Container](https://www.google.com/search?q=%23running-the-container)
-  - [Conclusion](https://www.google.com/search?q=%23conclusion)
-  - [Final Objective](https://www.google.com/search?q=%23final-objective)
+  - [Introduction](#introduction)
+  - [What is Docker?](#what-is-docker)
+  - [What is Podman?](#what-is-podman)
+  - [Dockerfile Explanation](#dockerfile-explanation)
+  - [Prerequisites](#prerequisites)
+  - [Building the Container Image](#building-the-container-image)
+  - [Running the Container](#running-the-container)
+  - [Conclusion](#conclusion)
+  - [Final Objective](#final-objective)
 
 -----
 

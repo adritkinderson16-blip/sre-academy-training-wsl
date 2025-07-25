@@ -16,7 +16,6 @@
 - [Use the Metric to Build a Graph](#use-the-metric-to-build-a-graph)
 - [Using the Same Query in Grafana](#using-the-same-query-in-grafana)
 - [Use the YAML File to Create the New Panel](#use-the-yaml-file-to-create-the-new-panel)
-- [Tip for Infrastructure as Code (IaC) with Ansible](#tip-for-infrastructure-as-code-iac-with-ansible)
 - [Final Objective](#final-objective)
 
 ---
@@ -242,25 +241,6 @@ kubectl delete -f ../exercise6/grafana.yaml
 kubectl apply -f ./grafana.yaml
 minikube service grafana-service -n monitoring
 ```
-
----
-
-## Optional: Run `cluster.sh` to Deploy
-
-If you run into issues applying resources manually (e.g., conflicting services or outdated configurations), you can use the provided `cluster.sh` script to clean and redeploy the environment:
-
-```bash
-chmod +x cluster.sh
-./cluster.sh
-```
-
-This script will:
-
-* Reapply required workloads from earlier exercises.
-* Clean up Prometheus and Grafana from previous setups.
-* Deploy the updated cAdvisor and Prometheus configuration.
-
-> Use this as a recovery mechanism if the manual steps fail due to a messy Kubernetes environment.
 
 ---
 
