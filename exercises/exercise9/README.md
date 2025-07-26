@@ -1,4 +1,4 @@
-# Exercise 9 – Generating Trace-Based Metrics Using OpenTelemetry and Prometheus
+# Generating Trace-Based Metrics Using OpenTelemetry and Prometheus
 
 ## Table of Contents
 

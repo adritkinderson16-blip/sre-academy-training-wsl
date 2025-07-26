@@ -1,4 +1,4 @@
-# Exercise 2 – Python App Packaged as a Docker Image
+# Python App Packaged as a Docker Image
 
 ## Table of Contents
 
