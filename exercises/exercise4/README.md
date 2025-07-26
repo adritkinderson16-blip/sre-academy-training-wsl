@@ -226,7 +226,7 @@ At the end of this exercise, you should accomplish the following:
 
 ## Next Steps
 
-In [Exercise 5](../exercise5), we’ll explore how to collect metrics from our containerized application using **Prometheus**. This marks the beginning of our observability journey in the SRE Academy.
+In [Exercise 4.1: Infrastructure as Code (IaC) with Ansible](../exercise4.1), you will learn how to automate the setup and configuration of your local development environment using **Ansible**. This is a crucial step towards understanding how to manage infrastructure programmatically.
 
 You should now be confident with:
 
