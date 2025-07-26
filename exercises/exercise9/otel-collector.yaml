@@ -25,15 +25,17 @@ spec:
           args:
             - "--config=/etc/otel-collector-config.yaml"
           ports:
-            - containerPort: 4317
+            - containerPort: 4317  # OTLP gRPC
+            - containerPort: 9464  # Prometheus metrics exposed here
           volumeMounts:
             - name: otel-config
-              mountPath: /etc/otel-collector-config.yaml  # Mount the config as a file
-              subPath: config.yaml  # This points to the correct key in the ConfigMap
+              mountPath: /etc/otel-collector-config.yaml
+              subPath: config.yaml
       volumes:
         - name: otel-config
           configMap:
-            name: otel-config  # Reference the ConfigMap containing the configuration
+            name: otel-config
+
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -47,53 +49,63 @@ data:
         protocols:
           grpc:
             endpoint: 0.0.0.0:4317
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: 'otel-collector'
+              static_configs:
+                - targets: ['0.0.0.0:8888']
 
     exporters:
       otlp/jaeger:
-        endpoint: "jaeger:4317"  # Update to use the correct Jaeger endpoint
+        endpoint: "jaeger:4317"
         tls:
           insecure: true
-      debug: {}  # Use debug exporter instead of logging
       prometheus:
-        endpoint: "0.0.0.0:9464"  # Prometheus exporter for metrics
-        namespace: "otel_collector"  # Optional: Adds prefix to metric names
-    connectors:
-      spanmetrics:  # Processor to generate metrics from traces
-          namespace: span.metrics
+        endpoint: "0.0.0.0:9464"
+        namespace: "otel_collector"
+      debug: {} # <--- ADDED THIS LINE: Defines the debug exporter
+
     processors:
       batch: {}
 
+    connectors:
+      spanmetrics:
+        namespace: span.metrics
 
     service:
-        pipelines:
-            logs:
-                receivers: [otlp]
-                processors: [batch]
-                exporters: [debug]
-            traces: 
-                receivers: [otlp]
-                processors: [batch]
-                exporters: [debug, otlp/jaeger, spanmetrics]
-            metrics:
-              receivers: [otlp, spanmetrics]
-              processors: [batch]
-              exporters: [prometheus]  # Send metrics to Prometheus
+      pipelines:
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug] # This now correctly references the defined debug exporter
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug, otlp/jaeger, spanmetrics] # This now correctly references the defined debug exporter
+        metrics:
+          receivers: [prometheus, otlp, spanmetrics]
+          processors: [batch]
+          exporters: [debug, prometheus] # This now correctly references the defined debug exporter
+
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: otel-collector
   namespace: opentelemetry
+  labels:
+    app: otel-collector
 spec:
-  type: ClusterIP
-  ports:
-    - name: metrics
-      port: 9464
-      targetPort: 9464
-      protocol: TCP
-    - name: otlp-grpc
-      port: 4317
-      targetPort: 4317
-      protocol: TCP
   selector:
     app: otel-collector
+  ports:
+    - protocol: TCP
+      port: 4317
+      targetPort: 4317
+      name: otlp-grpc
+    - protocol: TCP
+      port: 9464
+      targetPort: 9464
+      name: prometheus
+  type: NodePort

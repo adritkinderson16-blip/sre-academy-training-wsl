@@ -68,6 +68,12 @@ data:
         url: http://prometheus-service.monitoring.svc.cluster.local:9090
         isDefault: true
         editable: true
+      - name: Jaeger # <--- ADDED: Jaeger Data Source
+        type: jaeger
+        access: proxy
+        url: http://jaeger-query.opentelemetry.svc.cluster.local:16686 # IMPORTANT: Confirm this URL from your jaeger.yaml
+        isDefault: false
+        editable: true
 ---
 apiVersion: v1
 kind: ConfigMap
