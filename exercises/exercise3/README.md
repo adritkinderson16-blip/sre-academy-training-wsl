@@ -1,187 +1,169 @@
-# Pushing a Python Application to Docker Hub with Podman
+# Pushing a Python Application to Docker Hub with Colima
 
 ## Table of Contents
 
-- [Introduction to Docker Hub](#introduction-to-docker-hub)
-- [Creating a Docker Hub Account](#creating-a-docker-hub-account)
-- [Creating a Docker Repository](#creating-a-docker-repository)
-- [Pushing the Image to Docker Hub](#pushing-the-image-to-docker-hub)
-  - [Verify the Local Image](#verify-the-local-image)
-  - [Tag the Local Image](#tag-the-local-image)
-  - [Push the Image to Docker Hub](#push-the-image-to-docker-hub)
-- [Running Remote Images](#running-remote-images)
-- [Final Objective](#final-objective)
+* [Introduction to Docker Hub](#introduction-to-docker-hub)
+* [Creating a Docker Hub Account](#creating-a-docker-hub-account)
+* [Creating a Docker Repository](#creating-a-docker-repository)
+* [Prerequisites](#prerequisites)
+* [Start Colima](#start-colima)
+* [Navigate to the Application Directory](#navigate-to-the-application-directory)
+* [Pushing the Image to Docker Hub](#pushing-the-image-to-docker-hub)
 
------
+  * [Verify the Local Image](#verify-the-local-image)
+  * [Tag the Local Image](#tag-the-local-image)
+  * [Push the Image to Docker Hub](#push-the-image-to-docker-hub)
+* [Running Remote Images](#running-remote-images)
+* [Final Objective](#final-objective)
+* [Next Steps](#next-steps)
+
+---
 
 ## Introduction to Docker Hub
 
-Docker Hub is a cloud-based registry service where container images can be stored, shared, and managed. It simplifies the process of distributing containerized applications, making it easier for developers to collaborate and share resources.
+Docker Hub is a cloud-based registry service where container images can be stored, shared, and managed. It simplifies the process of distributing containerized applications, making it easier for developers to collaborate and deploy.
 
 ### Key Features:
 
-  - **Image Repositories:** Store and share container images publicly or privately.
-  - **Automated Builds:** Automatically build images from source repositories.
-  - **Webhooks:** Trigger actions on image updates.
-  - **Teams and Organizations:** Manage team permissions for repositories.
-  - **Official Images:** Access Docker-maintained, verified container images.
+* **Image Repositories** (public or private)
+* **Automated Builds**
+* **Webhooks**
+* **Team Access Control**
+* **Official Base Images**
 
-In this exercise, we will push the containerized Python application created in **Exercise \#2** to Docker Hub for distribution.
+---
 
------
+## Creating a Docker Hub Account
+
+1. Visit [https://hub.docker.com/](https://hub.docker.com/)
+2. Click **Sign Up** and follow the instructions.
+3. Confirm your email and log in.
+
+---
+
+## Creating a Docker Repository
+
+1. Log in to Docker Hub.
+2. Navigate to the **Repositories** tab and click **Create Repository**.
+3. Enter a name, set visibility (public/private), and click **Create**.
+
+---
+
+## Prerequisites
+
+Ensure the following tools are installed (refer to the `installation.md` file for setup instructions):
+
+* [Colima](https://github.com/abiosoft/colima)
+* [Docker CLI](https://docs.docker.com/get-docker/)
+* Python (optional, already covered in Exercise 1)
+
+---
+
+## Start Colima
+
+Colima provides a Linux VM with Docker support on macOS.
+
+Start Colima with Docker runtime:
+
+```bash
+colima start --runtime docker
+```
+
+This will boot up a Docker daemon ready to be used on your machine without needing Docker Desktop.
+
+---
 
 ## Navigate to the Application Directory
 
-To begin, navigate to the directory for Exercise 3:
+Navigate to the folder that contains your Dockerfile and app code:
 
 ```bash
 cd sre-academy-training/exercises/exercise3
 ```
 
-This directory contains the necessary files for the exercise, including the `Dockerfile` and application code.
-
------
-
-## Creating a Docker Hub Account
-
-To use Docker Hub, you need an account. Follow these steps to create one:
-
-1.  **Visit Docker Hub:**
-    Navigate to [Docker Hub](https://hub.docker.com/).
-
-2.  **Sign Up:**
-
-      * Click "Sign Up" at the top right.
-      * Enter your username, email, and password.
-      * Verify your email address by following the link sent to your inbox.
-
-3.  **Log In:**
-
-      * Use your credentials to access your Docker Hub account.
-
------
-
-## Creating a Docker Repository
-
-A Docker repository is where your container images will be stored. Here's how to create one:
-
-1.  **Log In to Docker Hub:**
-
-      * Go to [Docker Hub](https://hub.docker.com/) and log in.
-
-2.  **Create a New Repository:**
-
-      * Navigate to the "Repositories" tab and click "Create Repository."
-
-3.  **Provide Repository Details:**
-
-      * **Name:** Provide a unique, descriptive name (e.g., `my-python-app`).
-      * **Visibility:** Choose **Public** (anyone can pull) or **Private** (restricted access).
-      * **Description (optional):** Briefly describe the repository's purpose.
-
-4.  **Create the Repository:**
-
-      * Click "Create" to finalize.
-
------
+---
 
 ## Pushing the Image to Docker Hub
 
 ### Verify the Local Image
 
-Before tagging and pushing the image, confirm that the image exists locally:
+Run the following command to list local images:
 
-1.  Run the following command:
+```bash
+docker images
+```
 
-    ```bash
-    podman images
-    ```
+You should see an image named `my-python-app` (created in **Exercise 2**).
 
-    You should see an image named `my-python-app` with the tag `latest`. This is the image built in **Exercise \#2**.
-
------
+---
 
 ### Tag the Local Image
 
-We will tag the local image with your Docker Hub username and repository name.
+Tag the image to match your Docker Hub repository name:
 
-1.  Use the `podman tag` command to associate the local image with your Docker Hub repository:
+```bash
+docker tag my-python-app:latest username/my-python-app:latest
+```
 
-    ```bash
-    podman tag my-python-app:latest username/my-python-app:latest
-    ```
+Replace `username` with your Docker Hub username.
 
-    Replace:
-
-      * `username` with your Docker Hub username.
-      * `my-python-app` with the name of your Docker Hub repository.
-
-2.  Example:
-
-    ```bash
-    podman tag my-python-app:latest shesho/my-python-app:latest
-    ```
-
-This step ensures the local image is correctly associated with your Docker Hub repository.
-
------
+---
 
 ### Push the Image to Docker Hub
 
-1.  Log in to Docker Hub:
+1. Login to Docker Hub:
 
-    ```bash
-    podman login docker.io
-    ```
+```bash
+docker login
+```
 
-2.  Push the tagged image to your Docker Hub repository:
+2. Push the image:
 
-    ```bash
-    podman push username/my-python-app:latest
-    ```
+```bash
+docker push username/my-python-app:latest
+```
 
-3.  Example:
+Once complete, confirm it on [hub.docker.com](https://hub.docker.com/) under your Repositories tab.
 
-    ```bash
-    podman push shesho/my-python-app:latest
-    ```
-
-After successfully pushing the image, you can log in to [Docker Hub](https://hub.docker.com/) using a web browser to visually confirm that your image is available:
-
-  * Navigate to the **Repositories** section on the left sidebar.
-  * Look for your image name (e.g., `my-python-app`).
-  * You should see a timestamp under **Last Pushed** and confirm the image is **Public** or **Private** based on your repository settings.
-
-> This step is optional but highly recommended to validate that your image is hosted correctly and ready to be pulled or shared.
-
------
+---
 
 ## Running Remote Images
 
-After pushing the image to Docker Hub, you can pull and run it from any machine with Podman installed:
+To run the pushed image on any other machine (with Docker):
 
-1.  **Run the Container:**
+```bash
+docker run --rm -it -p 5000:5000 username/my-python-app:latest
+```
 
-    ```bash
-    podman run --rm -it -p 5000:5000 username/my-python-app:latest
-    ```
+Then go to:
 
-2.  **Access the Application:**
-    Open a web browser and go to:
-
-    ```bash
-    http://127.0.0.1:5000/
-    ```
+```
+http://127.0.0.1:5000/
+```
 
 ---
 
 ## Final Objective
 
-At the end of this exercise, you should accomplish the following:
+At the end of this exercise, you should be able to:
 
-> **\[!IMPORTANT]**
-> Once the container is running, open your web browser and go to `http://127.0.0.1:5000/`. You should see the text **"Hello, World!"** displayed.
->
+* Tag and push a Docker image to Docker Hub.
+* Pull and run that image on another environment using Docker.
+
 > ![app](app.png)
+
+Sure, here is the fixed version of that section with the hyperlink to the next exercise (Exercise 4):
+
+---
+
+## Next Steps
+
+In [Exercise 4](../exercise4), we’ll shift focus from pushing to Docker Hub to deploying our containerized application using Kubernetes, where we’ll leverage Minikube for local testing.
+
+You should now be confident with:
+
+* Working with Docker images locally.
+* Understanding Docker image tagging and naming conventions.
+* Interacting with Docker Hub using the CLI.
 
 ---

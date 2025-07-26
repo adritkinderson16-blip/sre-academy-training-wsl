@@ -5,7 +5,7 @@
   tasks:
     - name: Delete existing Grafana deployment
       command: kubectl delete -f ../exercise6/grafana.yaml
-      ignore_errors: yes  # Ignore errors if the file doesn't exist or can't be deleted
+      ignore_errors: yes
 
     - name: Apply the new Grafana configuration
       command: kubectl apply -f ./grafana.yaml

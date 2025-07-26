@@ -1,85 +1,79 @@
-# Deploying cAdvisor and Grafana in Minikube
+# **Deploying cAdvisor and Grafana in Minikube**
 
-## Table of Contents
+## **Table of Contents**
 
-- [Navigate to the Application Directory](#navigate-to-the-application-directory)
-- [Overview](#overview)
-- [Install cAdvisor](#install-cadvisor)
-- [Key Features](#key-features)
-- [Integration with Prometheus](#integration-with-prometheus)
-- [How It Works](#how-it-works)
-- [How to Use cAdvisor with Prometheus](#how-to-use-cadvisor-with-prometheus)
-- [Step 1: Running cAdvisor](#step-1-running-cadvisor)
-- [Step 2: Adding Configuration to Prometheus](#step-2-adding-configuration-to-prometheus)
-- [Step 3: Apply RBAC Permissions](#step-3-apply-rbac-permissions)
-- [Apply Changes to Prometheus](#apply-changes-to-prometheus)
-- [Use the Metric to Build a Graph](#use-the-metric-to-build-a-graph)
-- [Using the Same Query in Grafana](#using-the-same-query-in-grafana)
-- [Use the YAML File to Create the New Panel](#use-the-yaml-file-to-create-the-new-panel)
-- [Tip for Infrastructure as Code (IaC) with Ansible](#tip-for-infrastructure-as-code-iac-with-ansible)
-- [Final Objective](#final-objective)
+* [Navigate to the Application Directory](#navigate-to-the-application-directory)
+* [Overview](#overview)
+* [Install cAdvisor](#install-cadvisor)
+* [Key Features](#key-features)
+* [Integration with Prometheus](#integration-with-prometheus)
+* [How It Works](#how-it-works)
+* [Step 1: Running cAdvisor](#step-1-running-cadvisor)
+* [Prometheus Configuration Reference](#prometheus-configuration-reference)
+* [Validate Metrics Collection](#validate-metrics-collection)
+* [Use the Metric to Build a Graph](#use-the-metric-to-build-a-graph)
+* [Automated Grafana Panel](#automated-grafana-panel)
+* [Final Objective](#final-objective)
+* [Next Steps](#next-steps)
 
 ---
 
-## Navigate to the Application Directory
+## **Navigate to the Application Directory**
 
 To begin, navigate to the directory for Exercise 7:
 
 ```bash
 cd sre-academy-training/exercises/exercise7
-````
+```
 
 > **Note**: This directory contains the necessary files for the exercise.
-> **Important**: Before proceeding, ensure that both Minikube and Podman are running.
+> **Important**: Before proceeding, ensure that **Minikube is running** properly.
 
 ---
 
-## Overview
+## **Overview**
 
-In this exercise, we will add a new data source for Prometheus: **cAdvisor**. This integration will allow us to observe how the number of available metrics increases in Prometheus and visualize them in Grafana.
+In this exercise, we integrate **cAdvisor** with **Prometheus** to collect container-level metrics and display them in **Grafana**. You'll be able to visualize metrics such as CPU usage by pod.
 
 ![Python-2-Prometheus-2-Grafana](python-Prometheus-grafana.png)
 
-Open Prometheus with the following command:
-
-```bash
-minikube service start prometheus-service -n monitoring
-```
-
-Use this query to validate the number of metrics available:
+Before applying changes, it's helpful to check the current metric count:
 
 ```promql
 count({__name__=~".+"})
 ```
 
-![Prometheus result](query1.png)
+> This query shows the number of metrics currently available in Prometheus. Run it **before and after** deploying cAdvisor to confirm that additional metrics are being collected.
+
+To access Prometheus:
+
+```bash
+minikube service start prometheus-service -n monitoring
+```
 
 ---
 
-## Install cAdvisor
+## **Install cAdvisor**
 
-### Key Features
+### **Key Features**
 
-* **Real-time monitoring**: Collects real-time performance metrics from individual containers.
-* **Resource usage statistics**: Tracks CPU, memory, filesystem, and network usage.
-* **Per-container statistics**: Supports container-level granularity.
-* **Built-in support for Docker**: Seamlessly integrates with Docker to monitor container stats.
+* Real-time monitoring of running containers.
+* CPU, memory, filesystem, and network usage stats.
+* Built-in integration with Docker-compatible runtimes.
 
-### Integration with Prometheus
+### **Integration with Prometheus**
 
-**cAdvisor** integrates well with **Prometheus** to provide detailed container metrics. Prometheus scrapes metrics exposed by cAdvisor and stores them as time series data for analysis and alerting.
+**cAdvisor** exposes a `/metrics` endpoint on port `8080`, which Prometheus can scrape using Kubernetes pod service discovery.
 
-### How It Works
+### **How It Works**
 
-1. **cAdvisor runs on each Kubernetes node**: Collects metrics from containers.
-2. **cAdvisor exposes metrics on an HTTP endpoint**: Typically at `/metrics` (port `8080`).
-3. **Prometheus scrapes the cAdvisor endpoint**: Stores metrics for querying and visualization.
+1. **cAdvisor runs as a standalone pod**.
+2. Prometheus scrapes cAdvisor metrics exposed via `/metrics`.
+3. The collected metrics are available for graphing in Grafana.
 
 ---
 
-## How to Use cAdvisor with Prometheus
-
-### Step 1: Running cAdvisor
+## **Step 1: Running cAdvisor**
 
 Deploy cAdvisor using the provided YAML file:
 
@@ -87,15 +81,37 @@ Deploy cAdvisor using the provided YAML file:
 kubectl apply -f cadvisor.yaml
 ```
 
-Verify the cAdvisor pod status:
+Verify that the pod is running (in the **default** namespace):
 
 ```bash
-kubectl get pods -n monitoring
+kubectl get pods -n default
 ```
 
-### Step 2: Adding Configuration to Prometheus
+---
 
-Update Prometheus to scrape cAdvisor metrics by adding this job definition in `prometheus.yaml`:
+## **Step 2: Grant Prometheus Access via RBAC**
+
+To allow Prometheus to scrape metrics from cAdvisor (which runs in the `default` namespace), apply the provided ClusterRole and ClusterRoleBinding configuration:
+
+```bash
+kubectl apply -f prometheus-rbac-cluster.yaml
+```
+
+> **Why this is necessary**: Prometheus runs under a service account in the `monitoring` namespace, but cAdvisor is running in the `default` namespace. This RBAC configuration grants cluster-wide read permissions on pods and endpoints to Prometheus so it can discover and scrape metrics from any namespace.
+
+You can verify the role binding was created with:
+
+```bash
+kubectl get clusterrolebinding prometheus-pod-reader-binding-cluster
+```
+
+---
+
+## **Prometheus Configuration Reference**
+
+The Prometheus job to scrape cAdvisor is **already included** in the `prometheus.yaml` file provided in this exercise.
+
+You do **not** need to modify anything, but here’s the relevant block for reference:
 
 ```yaml
 - job_name: 'cadvisor'
@@ -109,168 +125,85 @@ Update Prometheus to scrape cAdvisor metrics by adding this job definition in `p
   scheme: http
 ```
 
-### Step 3: Apply RBAC Permissions
-
-Apply the required RBAC configuration to allow Prometheus to access pod and endpoint metadata in the `monitoring` namespace:
-
-```bash
-kubectl apply -f prometheus-rbac-cluster.yaml
-```
-
-This grants the necessary `get`, `list`, and `watch` permissions for resources required by Prometheus service discovery.
+> **Note**: This configuration tells Prometheus to find pods labeled `app=cadvisor` and scrape metrics from them.
 
 ---
 
-## Apply Changes to Prometheus
+## **Validate Metrics Collection**
 
-Deploy the updated Prometheus configuration:
-
-```bash
-kubectl delete -f ../exercise5/prometheus.yaml # Delete the old prometheus.yaml from exercise5
-kubectl apply -f prometheus.yaml # Apply the new prometheus.yaml from exercise7
-```
-
-**Note:** After applying the new configuration, Prometheus needs a moment to restart its pod. You can monitor its status to ensure it's ready before proceeding:
-
-```bash
-kubectl get pods -n monitoring -w
-```
-
-Wait until the `prometheus-deployment-...` pod shows `1/1 Running` and a recent `AGE`. Once it's ready, you can access the Prometheus UI:
-
-```bash
-minikube service prometheus-service -n monitoring
-```
-
-The **Targets** option in Prometheus should look like this:
-
-![Prometheus targets](targets.png)
-
-Use this query to validate the updated metrics:
+After waiting a few seconds, access Prometheus and run the following query again:
 
 ```promql
 count({__name__=~".+"})
 ```
 
-![Prometheus result](query2.png)
-
-> If the cAdvisor integration is working, you should see an increase in the number of metrics (e.g., 5000+), indicating successful collection of container-level metrics.
+> If cAdvisor was integrated successfully, the metric count should increase. This confirms Prometheus is now scraping container-level metrics.
 
 ---
 
-## Use the Metric to Build a Graph
+## **Use the Metric to Build a Graph**
 
-To analyze CPU usage, use this query in Prometheus:
-
-```promql
-rate(container_cpu_usage_seconds_total[5m])
-```
-
-Group results by pod:
+One of the most useful cAdvisor metrics is per-pod CPU usage:
 
 ```promql
 sum(rate(container_cpu_usage_seconds_total[5m])) by (container_label_io_kubernetes_pod_name)
 ```
 
-![Prometheus graph](query3.png)
+> You can run this query in Prometheus or Grafana, and **toggle between the Table and Graph views** to observe how the data is visualized differently. This is a good moment to explore and understand what each view offers in terms of insights.
 
 ---
 
-## Using the Same Query in Grafana
+## **Automated Grafana Panel**
 
-Deploy Grafana:
+The `grafana.yaml` file in this exercise already includes a preconfigured panel using the above query.
 
-```bash
-kubectl apply -f ../exercise6/grafana.yaml
-```
+> **Note**: You don’t need to modify or update anything manually. This automation ensures the panel is rendered automatically once Grafana is deployed.
 
-> Note: After applying the Grafana configuration, the pod needs a moment to become ready. You can monitor its status:
+To deploy Grafana:
 
 ```bash
-kubectl get pods -n monitoring -w
+kubectl apply -f grafana.yaml
 ```
 
-Wait until the grafana-deployment-... pod shows 1/1 Running. Once it's ready, you can access the Grafana UI:
+Monitor the pod until it’s ready:
+
+```bash
+kubectl get pods -n monitoring
+```
+
+Once the `grafana-deployment-...` pod is running, access Grafana:
 
 ```bash
 minikube service grafana-service -n monitoring
 ```
 
-Log in to Grafana (`admin/admin`) and add a new panel to the existing dashboard:
+Login credentials (by default):
 
-1.  Navigate to **Dashboards**.
-2.  Click on your existing dashboard, typically named "Example Dashboard" (or the name you previously assigned).
-3.  On the dashboard, click the **Edit** button at the top of the page.
-4.  Then, click the **Add** button at the top of the page, then select **Visualization**.
-5.  In the "Choose Data Source" dropdown, select **Prometheus**.
-6.  In the query editor section, you'll see "Query (Prometheus)". Click on the **Code** button (located next to the "Builder" button).
-7.  In the "Enter a PromQL query" text area, paste the following query:
-
-    ```promql
-    sum(rate(container_cpu_usage_seconds_total[5m])) by (container_label_io_kubernetes_pod_name)
-    ```
-
-8.  Click **Run queries** to visualize the graph.
-9.  Add a meaningful name to your new panel in the "Title" field (e.g., "Pod CPU Usage").
-10.  Click **Save Dashboard** (usually found at the top right) to add the panel to the dashboard.
-11. Finally, click **Save** to confirm changes to your existing dashboard.
-
-![Grafana static panel](grafana-1.png)
+* **User**: admin
+* **Password**: admin
 
 ---
 
-## Use the YAML File to Create the New Panel
+## **Final Objective**
 
-To automate panel creation, update the Grafana YAML configuration:
+At the end of this exercise, you should be able to:
 
-Add this block to the `grafana.yaml` file:
-
-```yaml
-"targets": [
-  {
-    "expr": "sum(rate(container_cpu_usage_seconds_total[5m])) by (container_label_io_kubernetes_pod_name)",
-    "refId": "B"
-  }
-],
-"title": "Pod CPU Usage",
-```
-
-Reapply the configuration:
-
-```bash
-kubectl delete -f ../exercise6/grafana.yaml
-kubectl apply -f ./grafana.yaml
-minikube service grafana-service -n monitoring
-```
-
----
-
-## Optional: Run `cluster.sh` to Deploy
-
-If you run into issues applying resources manually (e.g., conflicting services or outdated configurations), you can use the provided `cluster.sh` script to clean and redeploy the environment:
-
-```bash
-chmod +x cluster.sh
-./cluster.sh
-```
-
-This script will:
-
-* Reapply required workloads from earlier exercises.
-* Clean up Prometheus and Grafana from previous setups.
-* Deploy the updated cAdvisor and Prometheus configuration.
-
-> Use this as a recovery mechanism if the manual steps fail due to a messy Kubernetes environment.
-
----
-
-## Final Objective
-
-At the end of this exercise, you should achieve the following:
-
-* View an updated Grafana dashboard with container metrics.
-* Verify the new panel visualizing CPU usage by pod.
+* See increased metrics in Prometheus after deploying cAdvisor.
+* Visualize container CPU usage by pod in Grafana.
+* Automate the setup using YAML files provided in this exercise.
 
 ![Final Grafana dashboard](grafana-2.png)
+
+---
+
+## **Next Steps**
+
+In [Exercise 8](../exercise8), we’ll take observability to the next level by introducing **OpenTelemetry traces**. You'll learn how to instrument services and generate trace-based metrics to complement the metrics we’ve already explored.
+
+You should now be confident with:
+
+* Deploying cAdvisor for container-level monitoring.
+* Verifying metrics using Prometheus queries.
+* Automating Grafana dashboards for real-time visual insights.
 
 ---

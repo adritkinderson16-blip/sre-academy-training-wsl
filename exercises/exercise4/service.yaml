@@ -9,4 +9,3 @@ spec:
   ports:
   - port: 5000
     targetPort: 5000
-    nodePort: 30007 # You can specify a different NodePort if desired

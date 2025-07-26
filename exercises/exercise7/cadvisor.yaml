@@ -15,7 +15,9 @@ spec:
     spec:
       containers:
       - name: cadvisor
-        image: gcr.io/cadvisor/cadvisor:v0.47.0  # You can choose a version compatible with your setup
+        image: gcr.io/cadvisor/cadvisor:v0.47.0
+        args:
+          - --docker=unix:///var/run/docker.sock
         ports:
         - containerPort: 8080
           name: http-metrics
@@ -30,9 +32,9 @@ spec:
         - name: rootfs
           mountPath: /rootfs
           readOnly: true
-        - name: var-run
-          mountPath: /var/run
-          readOnly: true
+        - name: run
+          mountPath: /run
+          readOnly: false
         - name: sys
           mountPath: /sys
           readOnly: true
@@ -43,9 +45,9 @@ spec:
       - name: rootfs
         hostPath:
           path: /
-      - name: var-run
+      - name: run
         hostPath:
-          path: /var/run
+          path: /run
       - name: sys
         hostPath:
           path: /sys

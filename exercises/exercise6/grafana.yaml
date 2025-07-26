@@ -34,7 +34,9 @@ spec:
         - name: grafana-config-dashboards
           configMap:
             name: grafana-dashboards-config
+
 ---
+
 apiVersion: v1
 kind: Service
 metadata:
@@ -50,7 +52,9 @@ spec:
       port: 3000
       targetPort: 3000
   type: NodePort
+
 ---
+
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -68,7 +72,9 @@ data:
         url: http://prometheus-service.monitoring.svc.cluster.local:9090
         isDefault: true
         editable: true
+
 ---
+
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -100,6 +106,12 @@ data:
         {
           "datasource": "Prometheus",
           "id": 1,
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
           "targets": [
             {
               "expr": "sum by(job) (rate(process_cpu_seconds_total[1m]))",

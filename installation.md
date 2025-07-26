@@ -17,6 +17,7 @@ The setup is different depending on your operating system.
 | Minikube                    | To run a local Kubernetes cluster         |
 | kubectl                     | To manage Kubernetes resources            |
 | Homebrew (macOS)            | To install CLI tools                      |
+| pipx + Ansible              | For Infrastructure as Code (Exercise 4.1) |
 
 ---
 
@@ -45,6 +46,7 @@ brew install docker
 brew install minikube
 brew install kubectl
 ```
+
 ---
 
 ## For Windows Users
@@ -87,6 +89,7 @@ sudo apt install -y docker.io
 sudo apt install -y minikube
 sudo apt install -y kubectl
 ```
+
 ---
 
 ### Step 4: Add Your User to Docker Group
@@ -96,6 +99,41 @@ To avoid `sudo` when using Docker:
 ```bash
 sudo usermod -aG docker $USER
 newgrp docker
+```
+
+---
+
+## Install pipx and Ansible
+
+> Starting from Exercise 4.1, we will use `pipx` to install Ansible in an isolated environment.
+
+### On macOS
+
+```bash
+brew install pipx
+pipx ensurepath
+
+pipx install --include-deps ansible
+pipx upgrade --include-injected ansible
+pipx inject --include-apps ansible argcomplete
+```
+
+### On WSL2 (Ubuntu)
+
+```bash
+sudo apt update
+sudo apt install -y pipx python3-venv
+pipx ensurepath
+
+pipx install --include-deps ansible
+pipx upgrade --include-injected ansible
+pipx inject --include-apps ansible argcomplete
+```
+
+Verify installation:
+
+```bash
+ansible --version
 ```
 
 ---
@@ -110,6 +148,7 @@ pip3 --version
 docker --version
 minikube version
 kubectl version --client
+ansible --version
 ```
 
 If any command fails, resolve it **before** attending the first class.

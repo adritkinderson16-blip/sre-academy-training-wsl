@@ -1,52 +1,81 @@
-# Python Application with Podman
+# Exercise 2 – Python App Packaged as a Docker Image
 
 ## Table of Contents
 
-  - [Introduction](https://www.google.com/search?q=%23introduction)
-  - [What is Docker?](https://www.google.com/search?q=%23what-is-docker)
-  - [What is Podman?](https://www.google.com/search?q=%23what-is-podman)
-  - [Dockerfile Explanation](https://www.google.com/search?q=%23dockerfile-explanation)
-  - [Prerequisites](https://www.google.com/search?q=%23prerequisites)
-  - [Building the Container Image](https://www.google.com/search?q=%23building-the-container-image)
-  - [Running the Container](https://www.google.com/search?q=%23running-the-container)
-  - [Conclusion](https://www.google.com/search?q=%23conclusion)
-  - [Final Objective](https://www.google.com/search?q=%23final-objective)
+- [Navigate to the Exercise Directory](#navigate-to-the-exercise-directory)
+- [Overview](#overview)
+- [What is Docker?](#what-is-docker)
+- [What is Colima?](#what-is-colima)
+- [Why This Exercise Matters](#why-this-exercise-matters)
+- [Dockerfile Explanation](#dockerfile-explanation)
+- [Prerequisites](#prerequisites)
+- [Build the Docker Image](#build-the-docker-image)
+- [Run the Docker Container](#run-the-docker-container)
+- [Final Objective](#final-objective)
+- [Next Steps](#next-steps)
 
------
+---
 
-## Introduction
+## Navigate to the Exercise Directory
 
-This exercise focuses on containerizing a Python application and running it using **Podman**, a modern container management tool. You will learn how to build a container image and run it locally, enabling you to work with containerized environments in a secure and rootless manner.
+```bash
+cd sre-academy-training/exercises/exercise2
+````
 
------
+---
+
+## Overview
+
+This exercise focuses on **containerizing a simple Python Flask application** using Docker. You'll create a Docker image from your application code and run it in a consistent and isolated environment. This is a key step in enabling reproducibility, portability, and fast deployment across different systems.
+
+---
 
 ## What is Docker?
 
-**Docker** is a popular platform used for developing, shipping, and running applications inside containers. Containers allow developers to package an application with all its dependencies and run it in a consistent environment across different systems. Docker provides:
+**Docker** is a platform for building, running, and managing containers. Containers are lightweight, standalone, and executable units that include everything needed to run a piece of software: code, runtime, libraries, and configuration.
 
-  - Simplified container management.
-  - Compatibility across multiple platforms.
-  - A daemon-based approach to container orchestration.
+Key benefits:
 
------
+* Ensures consistent environments across development, testing, and production.
+* Eliminates “it works on my machine” problems.
+* Makes deployments faster and more reliable.
 
-## What is Podman?
+---
 
-**Podman** is an open-source container engine similar to Docker but without requiring a background daemon. Key features include:
+## What is Colima?
 
-  - **Daemonless and rootless operation** for enhanced security.
-  - Full compatibility with Dockerfiles.
-  - Support for running containers in environments where Docker is not available or needed.
+**Colima** (short for **Container On Lima**) is a tool that runs Docker and Kubernetes containers on macOS using a lightweight Linux virtual machine. It is an alternative to Docker Desktop and is often used on corporate laptops where Docker Desktop is restricted or not allowed.
 
-Unlike Docker, Podman does not require root access and provides improved security for managing containers.
+Colima uses the `docker` CLI and works seamlessly with the Docker ecosystem:
 
------
+* On **macOS**, it enables Docker-style workflows without requiring Docker Desktop.
+* On **Windows**, users typically use **WSL2 with Ubuntu** and install Docker CLI inside that Linux environment.
+
+---
+
+## Why This Exercise Matters
+
+In real-world production environments, applications run inside containers. Understanding how to:
+
+* Build an image,
+* Package your code,
+* Run it consistently anywhere,
+
+...is foundational for any SRE or DevOps role. This exercise introduces:
+
+* The `Dockerfile`: a reproducible recipe for building containers.
+* `docker build`: how to turn your source code into a reusable image.
+* `docker run`: how to run and test your container locally.
+
+These are the first steps toward automation, CI/CD pipelines, and deployment into Kubernetes.
+
+---
 
 ## Dockerfile Explanation
 
-The `Dockerfile` is a script that contains a series of instructions to automate the creation of a container image. Here is what each instruction in the provided `Dockerfile` does:
+Here’s the breakdown of the provided `Dockerfile`:
 
-```dockerfile
+```Dockerfile
 FROM python:3.10
 EXPOSE 5000
 WORKDIR /app
@@ -55,97 +84,91 @@ COPY . .
 CMD ["flask", "run", "--host", "0.0.0.0"]
 ```
 
-**Explanation:**
+* `FROM python:3.10`: Uses Python 3.10 as the base image.
+* `EXPOSE 5000`: Documents the port the app will use.
+* `WORKDIR /app`: Sets the working directory inside the container.
+* `RUN pip install flask`: Installs Flask inside the container.
+* `COPY . .`: Copies your local code to the container.
+* `CMD [...]`: Runs the Flask app, listening on all network interfaces.
 
-1.  `FROM python:3.10`: Specifies the **base image** (Python 3.10) for the container. This means your container will start with a clean Python 3.10 environment.
-2.  `EXPOSE 5000`: Informs Docker/Podman that the container is designed to **listen on port `5000`** at runtime. This is a declaration, not a firewall rule.
-3.  `WORKDIR /app`: Sets the **working directory** inside the container to `/app`. All subsequent commands (like `COPY`, `RUN`, `CMD`) will be executed relative to this directory.
-4.  `RUN pip install flask`: Executes the command to **install the `flask` package** inside the container. This ensures the application's dependencies are met.
-5.  `COPY . .`: **Copies all files** from the host's current directory (where the `Dockerfile` is located) into the container's working directory (`/app`). This includes `app.py`.
-6.  `CMD ["flask", "run", "--host", "0.0.0.0"]`: Defines the **command to run the Python application** when the container starts. It explicitly tells Flask to run and listen on all network interfaces (`0.0.0.0`).
-
------
+---
 
 ## Prerequisites
 
-Before you start, ensure the following:
+Before proceeding:
 
-  - **Podman installed** on macOS. Follow the [Podman installation guide](https://podman.io/getting-started/installation) or use:
-    ```bash
-    brew install podman
-    ```
-  - Basic understanding of Python and containerization concepts.
-  - Completion of Exercise \#1.
+* Make sure you have **Colima running with Docker**:
 
-For macOS users new to Podman, initialize and start the Podman machine:
+  ```bash
+  colima start --runtime docker
+  ```
 
-```bash
-podman machine init
-podman machine start
-```
+* Verify Docker is working:
 
-Verify that Podman is working with:
+  ```bash
+  docker version
+  ```
 
-```bash
-podman info
-```
+---
 
------
+## Build the Docker Image
 
-## Building the Container Image
-
-1.  Navigate to the `exercise2` directory:
-
-    ```bash
-    cd sre-academy-training/exercises/exercise2
-    ```
-
-2.  Build the container image:
-
-    ```bash
-    podman build -t my-python-app .
-    ```
-
-      - `-t my-python-app`: Assigns the **tag `my-python-app`** to the image, making it easy to reference later.
-      - `.`: Specifies the **current directory** containing the `Dockerfile`, indicating where Podman should look for the build context.
-
------
-
-## Running the Container
-
-Run the container using Podman:
+Run the following command inside the exercise directory:
 
 ```bash
-podman run --rm -it -p 5000:5000 my-python-app
+docker build -t my-python-app .
 ```
 
-Explanation of flags:
+What this does:
 
-  - `--rm`: **Removes the container** automatically once it stops, keeping your environment clean.
-  - `-it`: Runs the container in **interactive mode** and allocates a pseudo-TTY, allowing you to see logs and interact (e.g., Ctrl+C to stop).
-  - `-p 5000:5000`: **Maps port 5000** on the container to port 5000 on your host machine, making the application accessible from your browser.
+* Uses the `Dockerfile` to build a container image from your source code.
+* `-t my-python-app` tags the image so you can reference it easily.
+* `.` means the current directory is used as the build context (where to find the Dockerfile and app code).
 
-Access the application by visiting:
+---
+
+## Run the Docker Container
+
+Start your container:
+
+```bash
+docker run --rm -it -p 5000:5000 my-python-app
+```
+
+Flags explained:
+
+* `--rm`: Deletes the container after it stops (keeps your system clean).
+* `-it`: Runs interactively and shows logs in your terminal.
+* `-p 5000:5000`: Maps container port 5000 to host port 5000 so you can access the app in your browser.
+
+Visit:
 
 ```bash
 http://127.0.0.1:5000/
 ```
 
+You should see:
+
+```
+Hello, World!
+```
+
 ---
-
-## Conclusion
-
-You have now successfully containerized and run a Python application using Podman. This exercise demonstrates the basics of containerization and prepares you for more advanced deployment scenarios.
-
------
 
 ## Final Objective
 
-At the end of this exercise, you should accomplish the following:
+Your goal is to:
 
-> **[!IMPORTANT]**
-> Once the container is running, open your web browser and go to `http://127.0.0.1:5000/`. You should see the text **"Hello, World!"** displayed.
->
+* Successfully build a Docker image from the Python app.
+* Run the container using Docker.
+* Validate that the application runs correctly in the container.
+
 > ![app](app.png)
+
+---
+
+## Next Steps
+
+After verifying everything works, continue with [Exercise 3](../exercise3/), where you’ll push your image to a container registry to prepare it for sharing and deployment.
 
 ---

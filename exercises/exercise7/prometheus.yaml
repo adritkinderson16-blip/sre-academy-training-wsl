@@ -20,13 +20,12 @@ data:
       - job_name: 'prometheus'
         static_configs:
           - targets: ['localhost:9090']
-      # ADD THE CADVISOR JOB BELOW THIS LINE
       - job_name: 'cadvisor'
         kubernetes_sd_configs:
           - role: pod
-            namespaces: # Explicitly define namespaces to watch
+            namespaces:
               names:
-                - default # cAdvisor is running in the default namespace
+                - default
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_label_app]
             action: keep
