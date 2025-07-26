@@ -167,4 +167,18 @@ By completing this exercise, you should be able to:
   This panel shows a list of structured logs captured by Loki. You can see multiple log levels (`DEBUG`, `INFO`, `WARNING`, `ERROR`) with the message:
 
   ![errors-logs-panel-at-grafana-graph](errors-logs-panel-at-grafana-graph.png)
+
+---
+
+## Next Steps
+
+In [Exercise 11: Observability with Golden Signals in Grafana](../exercise11), you will learn how to effectively monitor your application and Kubernetes cluster using the **Golden Signals** framework (Latency, Traffic, Errors, and Saturation) within **Grafana**. This exercise will show you how to build insightful dashboards using the Prometheus and OpenTelemetry data you've configured.
+
+You should now be confident with:
+
+* Deploying a comprehensive monitoring stack including Prometheus, Grafana, Loki, and OpenTelemetry Collector.
+* Understanding the role of each component in collecting, storing, and visualizing metrics and logs.
+* Configuring persistent storage for your monitoring tools.
+* Ensuring your application is integrated with the observability pipeline.
+
 ---
