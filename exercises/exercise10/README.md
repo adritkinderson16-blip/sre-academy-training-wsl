@@ -276,7 +276,7 @@ This panel allows us to **track application errors in real time** using log filt
    ./cluster.sh
    ```
 
-   *Note: This may take several minutes on the first run.*
+   > This may take several minutes on the first run.
 
 ---
 
