@@ -226,7 +226,7 @@ At the end of this exercise, you should accomplish the following:
 
 ## Next Steps
 
-In [Exercise 4.1: Infrastructure as Code (IaC) with Ansible](../exercise4.1), you will learn how to automate the setup and configuration of your local development environment using **Ansible**. This is a crucial step towards understanding how to manage infrastructure programmatically.
+In [Exercise 4.1](../exercise4.1), you will learn how to automate the setup and configuration of your local development environment using **Ansible**. This is a crucial step towards understanding how to manage infrastructure programmatically.
 
 You should now be confident with:
 

@@ -38,72 +38,225 @@ The configurations in this exercise primarily correspond to the blue square in t
 
 ## **Understanding the Setup**
 
-This section describes the key configuration changes and components involved in setting up the logging and observability pipeline. All necessary YAML files are provided in this directory or referenced from other exercise directories.
+This section breaks down how the logging pipeline works by highlighting the most important code and configuration changes needed to support log forwarding from the application to Grafana via Loki and the OpenTelemetry Collector.
+
+---
 
 ### **Application Logging with OpenTelemetry**
 
-The Python application's code (`app.py`) has been modified to:
+The Python application is configured to generate structured logs and write them to a file. These logs are later collected by the OpenTelemetry Collector.
 
-* Use standard Python `logging`.
-* Direct logs to `./logs/sre-app.log` inside the container.
-* Instrument logging using `opentelemetry-instrumentation-logging` to automatically export logs via OTLP (OpenTelemetry Protocol).
+Inside `app.py`, logs are written explicitly to a file (`/var/log/sre-app/sre-app.log`) using a `FileHandler`:
 
-The `Dockerfile` is adjusted to:
+```python
+file_handler = FileHandler('/var/log/sre-app/sre-app.log')
+file_handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)s')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+```
 
-* Install the `opentelemetry-instrumentation-logging` library.
-* Create the `/app/logs` directory inside the image and set appropriate permissions to ensure the application can write logs.
+Additionally, OpenTelemetry logging instrumentation is configured to export logs:
 
-> See: `app.py` and `Dockerfile` in this directory.
+```python
+log_exporter = OTLPLogExporter(
+    endpoint="otel-collector.opentelemetry.svc.cluster.local:4317",
+    insecure=True
+)
+
+log_processor = BatchLogRecordProcessor(log_exporter)
+logger_provider.add_log_record_processor(log_processor)
+
+otel_handler = LoggingHandler(logger_provider=logger_provider)
+logger.addHandler(otel_handler)
+```
+
+The result is that the app logs both to file (for file scraping by the collector) and directly over OTLP (for redundancy and testing purposes).
+
+---
 
 ### **Shared Log Volume Configuration**
 
-To allow both the application and the OpenTelemetry Collector to access the same log file, a shared volume is used:
+We use **two PersistentVolumes (PVs)** backed by the same host directory on the Minikube VM (`/data/sre-app/logs`). These volumes are then mounted to both the app and the collector via PVCs.
 
-* **Minikube Host Directory**: A directory `/data/sre-app/logs` is created on the Minikube VM's host filesystem. This directory acts as the shared location.
-* **Persistent Volumes (PVs)**: Two `hostPath` Persistent Volumes (`log-pv-1` and `log-pv-2`) are defined, pointing to the `/data/sre-app/logs` directory on the Minikube node.
-* **Persistent Volume Claims (PVCs)**:
+Below is an excerpt from the `PersistentVolume` definition:
 
-  * `log-pvc` in the `application` namespace claims `log-pv-1` and is mounted into the application's container at `/app/logs`.
-  * `log-pvc` in the `opentelemetry` namespace claims `log-pv-2` and is mounted into the OpenTelemetry Collector's container at `/var/log/sre-app`.
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: log-pv-1
+spec:
+  capacity:
+    storage: 500Mi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /data/sre-app/logs
+```
 
-> See: `storage.yaml` and `deployment.yaml`.
+The `application` namespace claims this volume like so:
+
+```yaml
+kind: PersistentVolumeClaim
+metadata:
+  name: log-pvc
+  namespace: application
+spec:
+  volumeName: log-pv-1
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 500Mi
+```
+
+Then, the app `deployment.yaml` mounts this shared PVC to the container:
+
+```yaml
+volumeMounts:
+  - mountPath: /var/log/sre-app
+    name: log-volume
+
+volumes:
+  - name: log-volume
+    persistentVolumeClaim:
+      claimName: log-pvc
+```
+
+This makes sure logs written to `/var/log/sre-app/sre-app.log` by the app are readable by the OpenTelemetry Collector.
+
+---
 
 ### **OpenTelemetry Collector Configuration**
 
-The OpenTelemetry Collector (`otel-collector.yaml`) is configured to:
+The collector is configured with a `filelog` receiver to **tail log files** from the shared volume and an `otlphttp/loki` exporter to forward them to Loki.
 
-* Mount the shared log volume (`log-pvc` from `opentelemetry` namespace) at `/var/log/sre-app`.
-* Use a `filelog` receiver to tail log files within `/var/log/sre-app/*.log`.
-* Utilize an `otlphttp/loki` exporter to forward collected logs to the Loki service.
-* Configure a `logs` pipeline that routes logs from the `filelog` receiver to the `otlphttp/loki` exporter.
+Here’s a relevant excerpt from `otel-collector.yaml`:
 
-> See: `otel-collector.yaml`.
+```yaml
+receivers:
+  filelog:
+    include: [ /var/log/sre-app/*.log ]
+    start_at: beginning
+    operators:
+      - type: json_parser
+        timestamp:
+          parse_from: attributes.time
+        severity:
+          parse_from: body.level
+        message:
+          parse_from: body.message
+```
+
+And the `exporters` section:
+
+```yaml
+exporters:
+  otlphttp/loki:
+    endpoint: http://loki.opentelemetry.svc.cluster.local:3100/loki/api/v1/push
+```
+
+The `service` section ties everything together:
+
+```yaml
+service:
+  pipelines:
+    logs:
+      receivers: [filelog]
+      processors: []
+      exporters: [otlphttp/loki]
+```
+
+The OpenTelemetry Collector is deployed in the `opentelemetry` namespace and mounts its own PVC (pointing to the same hostPath on Minikube).
+
+---
 
 ### **Grafana Loki Setup**
 
-Grafana Loki is deployed as the centralized log aggregation system. The OpenTelemetry Collector sends logs to Loki, making them available for querying by Grafana.
+Grafana Loki runs as a standalone deployment and receives logs via HTTP from the Collector. It listens on port `3100`.
 
-> See: `grafana-loki.yaml`.
+Here’s the Loki `Service` definition:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  namespace: opentelemetry
+spec:
+  ports:
+    - port: 3100
+      targetPort: 3100
+  selector:
+    app: loki
+```
+
+No additional configuration is required beyond ensuring the endpoint matches the one defined in the `otel-collector.yaml` exporter.
+
+---
 
 ### **Prometheus RBAC Setup**
 
-For Prometheus to effectively discover and scrape metrics from all components across the cluster (including `cadvisor` and other Kubernetes-internal targets), it requires specific cluster-wide permissions. This is granted via:
+Prometheus needs **cluster-level permissions** to discover pods, endpoints, and services.
 
-* A `ClusterRole` named `prometheus-pod-reader-cluster` with `get`, `list`, and `watch` permissions on `pods` and `endpoints`.
-* A `ClusterRoleBinding` that binds this `ClusterRole` to the `default` ServiceAccount in the `monitoring` namespace, which the Prometheus pod uses.
+Below is a simplified `ClusterRole` definition:
 
-> See: `prometheus-rbac-cluster.yaml`.
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-pod-reader-cluster
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "endpoints"]
+    verbs: ["get", "list", "watch"]
+```
+
+And the `ClusterRoleBinding`:
+
+```yaml
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-pod-reader-binding-cluster
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: monitoring
+roleRef:
+  kind: ClusterRole
+  name: prometheus-pod-reader-cluster
+  apiGroup: rbac.authorization.k8s.io
+```
+
+This ensures Prometheus running in the `monitoring` namespace has visibility into all required Kubernetes resources.
+
+---
 
 ### **Grafana Integration (Datasource & Dashboard)**
 
-Grafana is configured to:
+Grafana is configured to use Loki as a data source, and we also deploy a dashboard with a panel that filters errors.
 
-* Add a new `Loki` datasource, pointing to `http://loki.opentelemetry.svc.cluster.local:3100`.
-* Include an example dashboard that features a panel specifically designed to display error logs by querying Loki for entries containing `"goo encountered an error:"`.
+Datasource config snippet from `grafana.yaml`:
 
-> The panel titled **“Error Occurrences for Unknown Service”** is part of the Example Dashboard in Grafana and helps identify error trends.
+```yaml
+apiVersion: 1
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki.opentelemetry.svc.cluster.local:3100
+    jsonData:
+      maxLines: 1000
+```
 
-> See: `grafana.yaml`.
+Example log panel query:
+
+```logql
+{service_name="unknown_service"} |= "goo encountered an error"
+```
+
+This panel allows us to **track application errors in real time** using log filtering.
 
 ---
 
@@ -172,7 +325,7 @@ By completing this exercise, you should be able to:
 
 ## Next Steps
 
-In [Exercise 11: Observability with Golden Signals in Grafana](../exercise11), you will learn how to effectively monitor your application and Kubernetes cluster using the **Golden Signals** framework (Latency, Traffic, Errors, and Saturation) within **Grafana**. This exercise will show you how to build insightful dashboards using the Prometheus and OpenTelemetry data you've configured.
+In [Exercise 11](../exercise11), you will learn how to effectively monitor your application and Kubernetes cluster using the **Golden Signals** framework (Latency, Traffic, Errors, and Saturation) within **Grafana**. This exercise will show you how to build insightful dashboards using the Prometheus and OpenTelemetry data you've configured.
 
 You should now be confident with:
 
