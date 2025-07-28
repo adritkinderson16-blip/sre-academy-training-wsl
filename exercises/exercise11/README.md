@@ -9,20 +9,30 @@
   - [Errors](#errors)
   - [Saturation](#saturation)
 - [Deployment](#deployment)
-- [Tip for Infrastructure as Code (IaC) with Ansible](#tip-for-infrastructure-as-code-iac-with-ansible)
+- [Troubleshooting Prometheus Targets](#troubleshooting-prometheus-targets)
 - [Final Objective](#final-objective)
-- [Cleanup](#cleanup)
+- [Next Steps](#next-steps)
 
 ---
 
-# Observability approach
+## **Important Note About Dashboards**
+
+All **Grafana dashboards and panels** used in this exercise are provisioned **automatically** using the configuration defined in `grafana.yaml`. This means:
+
+- You do **not** need to manually create or configure dashboards or panels.
+- The Prometheus and LogQL queries shown throughout this guide are for **reference only**, to help you understand how each panel works and what data it visualizes.
+
+---
+
+## **Observability Approach**
 
 This exercise focuses on **observability** using the **Golden Signals** framework in **Site Reliability Engineering (SRE)**. The Golden Signals—**Latency, Traffic, Errors, and Saturation**—are key indicators of system health. They enable SREs to detect performance degradation, troubleshoot issues, and optimize resource allocation.
 
 This exercise builds on previous ones, using:
-- **Grafana** for visualization
-- **Prometheus** for metric collection
-- **OpenTelemetry** for distributed tracing
+
+- **Grafana** for visualization  
+- **Prometheus** for metric collection  
+- **OpenTelemetry** for distributed tracing  
 
 The infrastructure remains the same as in **Exercise 10**, as we are enhancing monitoring **inside Grafana**.
 
@@ -33,11 +43,12 @@ The following configurations correspond to the **blue square** in the diagram ab
 ---
 
 ## **Navigate to the Directory**
+
 Before proceeding, navigate to the correct directory:
 
 ```bash
-cd sre-abc-training/exercises/exercise11
-```
+cd sre-academy-training/exercises/exercise11
+````
 
 ---
 
@@ -47,190 +58,198 @@ The **Golden Signals** framework provides four key metrics that help **Site Reli
 
 ---
 
-### **1. Latency**  
+### **1. Latency**
 
-**Definition**: The time it takes to process a request. Latency includes both **successful** and **failed** requests, but the focus is on measuring **successful response times** as a key indicator of system performance.
+**Definition:** The time it takes to process a request. Latency includes both **successful** and **failed** requests, but the focus is on measuring **successful response times** as a key indicator of system performance.
 
-#### **Grafana Configuration:**
-> **📌 TIP**  
-> Create a **Grafana panel** with the following PromQL query:
-> ```promql
-> sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
-> ```
-> using the `otel_collector_span_metrics_duration_milliseconds_bucket` metric from the **Cadvisor** service.  
-> The expected output should look like this:  
->
-> ![Prometheus result](images/prometheus_result1.png)
+**Prometheus Query (used in provisioned panel):**
+
+```promql
+sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
+```
+
+![Prometheus result](images/prometheus_result1.png)
 
 ---
 
-### **2. Traffic**  
+### **2. Traffic**
 
-**Definition**: The total **request volume** your system processes over time. Traffic helps identify usage patterns and potential scalability requirements.
+**Definition:** The total **request volume** your system processes over time. Traffic helps identify usage patterns and potential scalability requirements.
 
-#### **Grafana Configuration:**
-> **📌 TIP**  
-> Create a **Grafana panel** with:  
-> ```promql
-> sum(rate(container_network_receive_bytes_total[5m])) by (container_label_k8s_app)
-> ```
-> using the `container_network_receive_bytes_total` metric from the **Cadvisor** service.  
-> The expected output should be:  
->
-> ![Prometheus result](images/prometheus_result2.png)
+**Receive Traffic:**
 
-> **📌 TIP**  
-> Create another **Grafana panel** for transmitted network traffic:  
-> ```promql
-> sum(rate(container_network_transmit_bytes_total[5m])) by (span_name)
-> ```
-> using the `container_network_transmit_bytes_total` metric from the **Cadvisor** service.  
-> The expected output should be:  
->
-> ![Prometheus result](images/prometheus_result3.png)
+```promql
+sum(rate(container_network_receive_bytes_total[5m])) by (container_label_k8s_app)
+```
 
-> **📌 TIP**  
-> Monitor **network receive errors** with this query:  
-> ```promql
-> sum(rate(container_network_receive_errors_total[5m])) by (span_name)
-> ```
-> using the `container_network_receive_errors_total` metric from **Cadvisor**.  
-> The expected output should be:  
->
-> ![Prometheus result](images/prometheus_result4.png)
+![Prometheus result](images/prometheus_result2.png)
 
-> **📌 TIP**  
-> Monitor **network transmit errors** with this query:  
-> ```promql
-> sum(rate(container_network_transmit_errors_total[5m])) by (span_name)
-> ```
-> using the `container_network_transmit_errors_total` metric from **Cadvisor**.  
-> The expected output should be:  
->
-> ![Prometheus result](images/prometheus_result5.png)
+**Transmit Traffic:**
+
+```promql
+sum(rate(container_network_transmit_bytes_total[5m])) by (container_label_k8s_app)
+```
+
+![Prometheus result](images/prometheus_result3.png)
+
+**Receive Errors:**
+
+```promql
+sum(rate(container_network_receive_errors_total[5m])) by (container_label_k8s_app)
+```
+
+![Prometheus result](images/prometheus_result4.png)
+
+**Transmit Errors:**
+
+```promql
+sum(rate(container_network_transmit_errors_total[5m])) by (container_label_k8s_app)
+```
+
+![Prometheus result](images/prometheus_result5.png)
 
 ---
 
-### **3. Errors**  
+### **3. Errors**
 
-**Definition**: The rate of **failed requests** in the system. This includes HTTP errors (e.g., `5xx` codes) and **application-level failures**. High error rates indicate **instability** and may require immediate attention.
+**Definition:** The rate of **failed requests** in the system. This includes HTTP errors (e.g., `5xx` codes) and **application-level failures**. High error rates indicate **instability** and may require immediate attention.
 
-#### **Grafana Configuration:**
-> **📌 TIP**  
-> Create a **Grafana panel** with the following PromQL query:
-> ```promql
-> sum(rate(container_scrape_error[5m])) by (job)
-> ```
-> using the `container_scrape_error` metric from **Cadvisor**.  
-> The expected output should be:  
->
-> ![Prometheus result](images/prometheus_result6.png)
+**Container Scrape Errors:**
 
-> **📌 TIP**  
-> Create a **Grafana log panel** for error-level logs:  
-> ```promql
-> {service_name="unknown_service"} |= "err"
-> ```
-> This filters logs where `"err"` appears in the **log level** field.  
-> The expected output should be:  
->
-> ![Grafana result](images/grafana_result1.png)
+```promql
+sum(rate(container_scrape_error[5m])) by (job)
+```
+
+![Prometheus result](images/prometheus_result6.png)
+
+**Application Log Errors:**
+
+```logql
+{service_name="unknown_service"} |= "err"
+```
+
+![Grafana result](images/grafana_result1.png)
 
 ---
 
-### **4. Saturation**  
+### **4. Saturation**
 
-**Definition**: The **resource utilization** of the system. This includes CPU, memory, and disk usage. **High saturation levels** indicate potential performance bottlenecks.
+**Definition:** The **resource utilization** of the system. This includes CPU, memory, and disk usage. **High saturation levels** indicate potential performance bottlenecks.
 
-#### **Grafana Configuration:**
-> **📌 TIP**  
-> Create a **Grafana panel** for **CPU saturation** using this query:
-> ```promql
-> sum(rate(container_cpu_system_seconds_total[5m])) by (job)
-> ```
-> using the `container_cpu_system_seconds_total` metric from **Cadvisor**.  
-> The expected output should be:  
->
-> ![Prometheus result](images/prometheus_result7.png)
+**CPU Usage:**
 
-> **📌 TIP**  
-> Create a **Grafana panel** to track Kubernetes **container resource allocation**:
-> ```promql
-> sum(rate(container_label_io_kubernetes_container_name[5m])) by (job)
-> ```
-> using the `container_label_io_kubernetes_container_name` metric from **Cadvisor**.  
-> The expected output should be:  
->
-> ![Prometheus result](images/prometheus_result8.png)
+```promql
+sum(rate(container_cpu_usage_seconds_total[5m])) by (container_name, pod_name)
+```
+
+![Prometheus result](images/prometheus_result7.png)
+
+**Memory Usage:**
+
+```promql
+count by (container_name) (container_memory_usage_bytes{container_name!="POD",container_name!=""})
+```
+
+![Prometheus result](images/prometheus_result8.png)
 
 ---
 
 ## **Deployment**
 
-Before applying new configurations, **clean up previous resources**:
+To deploy the environment for this exercise, run the following:
 
 ```bash
-#!/bin/bash
+./cluster.sh
+```
 
-kubectl delete ns application
-kubectl delete ns opentelemetry
-kubectl delete ns monitoring
-kubectl delete pv --all 
-kubectl delete pvc --all 
-sleep 5;
+This script automates the entire setup, including:
 
-echo "-------------------------------------------------------------------------"
-echo "Start creating"
-echo "-------------------------------------------------------------------------"
-kubectl apply -f ../exercise10/storage.yaml;
-kubectl apply -f ../exercise10/deployment.yaml;
-kubectl apply -f ../exercise10/otel-collector.yaml;
-kubectl apply -f ../exercise8/jaeger.yaml;
-kubectl apply -f ../exercise9/prometheus.yaml;
-kubectl apply -f ../exercise10/grafana-loki.yaml;
-kubectl apply -f ./grafana.yaml;
-echo "-------------------------------------------------------------------------"
-echo "wait"
-echo "-------------------------------------------------------------------------"
-sleep 5;
-kubectl get pods -A
+* Verifying dependencies (`colima`, `minikube`, `kubectl`)
+* Cleaning up existing environments
+* Building the Docker image
+* Starting Minikube via Colima
+* Applying manifests:
+
+  * `otel-collector.yaml`
+  * `grafana.yaml`
+  * `prometheus.yaml`
+  * `deployment.yaml`
+  * plus Jaeger, Loki, and volume setup
+
+Grafana and Prometheus UIs will open automatically in your browser once the deployment completes.
+
+---
+
+## **Troubleshooting Prometheus Targets**
+
+After deployment, ensure all Prometheus targets are healthy.
+
+```bash
+kubectl port-forward -n monitoring svc/prometheus-service 9090:9090 &
+sleep 3
+curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, health: .health, lastError: .lastError}'
+```
+
+### **Expected Healthy Targets**
+
+* `prometheus`
+* `kubernetes-cadvisor`
+* `otel-collector`
+* `kubernetes-pods`
+* `kubernetes-services`
+
+### **Common Issues & Fixes**
+
+**DNS Resolution Errors (`server misbehaving`):**
+
+* Likely due to incorrect relabeling.
+* Check `__meta_kubernetes_pod_ip`.
+
+**HTTP 404 Errors:**
+
+* Normal for endpoints that expose no `/metrics`.
+
+**Connection Refused:**
+
+* Service may not be running.
+* Check port configuration.
+
+### **More Diagnostic Commands**
+
+```bash
+# View only failing targets
+curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | select(.health == "down") | {job: .labels.job, instance: .labels.instance, error: .lastError}'
+
+# Get target health summary
+curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets | {total: length, up: map(select(.health == "up")) | length, down: map(select(.health == "down")) | length}'
+
+# Show available container metrics
+curl -s http://localhost:9090/api/v1/label/__name__/values | jq '.data[] | select(test("container_"))'
 ```
 
 ---
 
-## **Tip for Infrastructure as Code (IaC) with Ansible**
-
-> [!TIP]
-> A more efficient **Infrastructure as Code (IaC)** approach can be implemented with Ansible to apply the new configuration and start its service in Minikube. An [example](./infra.yaml) of how to structure a YAML playbook to achieve this.
-
-Run the playbook:
-
-```bash
-ansible-playbook -i ../exercise4.1/ansible_quickstart/inventory.ini infra.yaml
-minikube service grafana-service -n monitoring
-```
-
----
 ## **Final Objective**
 
-At the end of this document, you should accomplished this:
-> [!IMPORTANT]
-> These signals offer a holistic view of system performance, enabling SREs to quickly address critical reliability issues. Here is a preview of the dashboard 
-> 
-> <img src="images/Dashboard.png" alt="Dashboard" height="150" />
-> <img src="images/Dashboard1.png" alt="Dashboard" height="150" />
-> 
-> At [New Dashboard](grafana.yaml) is an example of all Grafana setting which include the new dashboard configuration
+At this point, you should now have a complete **Golden Signals dashboard** in Grafana with all panels fully functional.
+
+> These signals provide a holistic view of your system’s health, enabling early detection of failures and resource issues.
+
+<img src="images/Dashboard.png" alt="Dashboard" height="150" />
+<img src="images/Dashboard1.png" alt="Dashboard" height="150" />
 
 ---
 
-## **Cleanup**
-To remove all resources:
+## **Next Steps**
 
-```bash
-kubectl delete ns application opentelemetry monitoring
-kubectl delete pv --all
-kubectl delete pvc --all
-```
+In [Exercise 12](../exercise12), you will focus on **alerting in Grafana**, combining **log-based alerts** using Loki and **metrics-based alerts** using Prometheus. This step builds on the observability pipeline you've set up, helping you detect issues like increased latency or application errors in real-time.
+
+You should now be confident with:
+
+* Deploying a complete observability stack using Prometheus, Grafana, Loki, and OpenTelemetry Collector.
+* Understanding how spans and metrics are collected and visualized.
+* Automating environment provisioning using a deployment script.
+* Validating metrics in Prometheus and visualizing span-related data in Grafana dashboards.
+* Using both **PromQL** (Prometheus Query Language) for metrics and **LogQL** for log analysis.
 
 ---
