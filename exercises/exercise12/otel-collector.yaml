@@ -1,0 +1,131 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opentelemetry
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: log-pvc
+  namespace: opentelemetry
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 3Gi
+  storageClassName: ""
+  volumeName: log-pv-2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: opentelemetry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+      annotations: # <--- ADDED: Prometheus scrape annotations for Deployment
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.111.0
+          args:
+            - "--config=/etc/otel-collector-config.yaml"
+          ports:
+            - containerPort: 4317
+            - containerPort: 9464 # <--- ENSURE THIS IS PRESENT
+          volumeMounts:
+            - name: otel-config
+              mountPath: /etc/otel-collector-config.yaml
+              subPath: config.yaml
+            - name: log-volume
+              mountPath: /var/log/sre-app
+      volumes:
+        - name: otel-config
+          configMap:
+            name: otel-config
+        - name: log-volume
+          persistentVolumeClaim:
+            claimName: log-pvc
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-config
+  namespace: opentelemetry
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+      filelog:
+        include: ["/var/log/sre-app/*.log"]
+        start_at: beginning
+
+    exporters:
+      otlphttp/loki:
+        endpoint: http://loki.opentelemetry.svc.cluster.local:3100/otlp
+        tls:
+          insecure: true
+      otlp/jaeger:
+        endpoint: "jaeger:4317"
+        tls:
+          insecure: true
+      prometheus:
+        endpoint: "0.0.0.0:9464"
+        namespace: "otel_collector"
+    connectors:
+      spanmetrics:
+          namespace: span.metrics
+    processors:
+      batch: {}
+
+    service:
+        pipelines:
+            logs:
+                receivers: [otlp, filelog]
+                processors: [batch]
+                exporters: [otlphttp/loki]
+            traces:
+                receivers: [otlp]
+                processors: [batch]
+                exporters: [otlp/jaeger, spanmetrics]
+            metrics:
+              receivers: [otlp, spanmetrics]
+              processors: [batch]
+              exporters: [prometheus]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: opentelemetry
+  annotations: # <--- ADDED: Prometheus scrape annotations for Service
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9464"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+    - name: metrics
+      port: 9464
+      targetPort: 9464
+      protocol: TCP
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+  selector:
+    app: otel-collector

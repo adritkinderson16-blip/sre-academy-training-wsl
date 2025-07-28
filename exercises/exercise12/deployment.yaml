@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: application
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sre-abc-training-app
+  namespace: application
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: sre-abc-training-app
+  template:
+    metadata:
+      labels:
+        app: sre-abc-training-app
+      annotations: # <--- ADDED: Prometheus scrape annotations
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5000"
+        prometheus.io/path: "/metrics" # Assuming your app exposes metrics at /metrics
+    spec:
+      containers:
+      - name: sre-abc-training-app
+        image: cguillenmendez/sre-abc-training-python-app:0.0.23
+        ports:
+        - containerPort: 5000
+        volumeMounts:
+        - name: log-volume
+          mountPath: /app/logs
+      volumes:
+      - name: log-volume
+        persistentVolumeClaim:
+          claimName: log-pvc
+          # Note: If this PVC is meant to be shared across pods/namespaces,
+          # you'd need a ReadWriteMany PV provisioner. Minikube's default
+          # hostpath or nfs provisioners often support this.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: log-pvc
+  namespace: application
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 3Gi
+  storageClassName: "" # Explicitly setting storageClassName to empty string
+  volumeName: log-pv-1 # Explicitly bind to the PV named "log-pv" (ensure this PV exists and matches)
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sre-abc-training-service
+  namespace: application
+  annotations: # <--- ADDED: Prometheus scrape annotations for Service
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "5000"
+    prometheus.io/path: "/metrics"
+spec:
+  type: NodePort
+  selector:
+    app: sre-abc-training-app
+  ports:
+  - port: 5000
+    targetPort: 5000
+    nodePort: 30007 # You can specify a different NodePort if desired
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: store-caller
+  namespace: application
+spec:
+  schedule: "*/1 * * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: curl-container
+            image: curlimages/curl:7.85.0
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                sleep 1;
+                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                sleep 1;
+                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                sleep 1;
+                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                sleep 1;
+                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                sleep 1;
+                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                sleep 1;
+          restartPolicy: Never

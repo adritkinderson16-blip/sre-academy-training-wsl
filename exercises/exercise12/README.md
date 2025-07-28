@@ -2,51 +2,117 @@
 
 ## **Table of Contents**
 
-- [Overview](#overview)
-- [Loki Configuration for Alerting](#loki-configuration-for-alerting)
-- [Creating Alerts in Grafana](#creating-alerts-in-grafana)
-  - [1. Configuring Loki for Alerting](#1-configuring-loki-for-alerting)
-  - [2. Creating an Alert for the Latency Panel](#2-creating-an-alert-for-the-latency-panel)
-  - [3. Creating Additional Alerts Based on SLOs](#3-creating-additional-alerts-based-on-slos)
-- [Deployment](#deployment)
-- [Tip for Infrastructure as Code (IaC) with Ansible](#tip-for-infrastructure-as-code-iac-with-ansible)
-- [Final Objective](#final-objective)
-- [Cleanup](#cleanup)
+* [Overview](#overview)
+* [Understanding the Alerting Setup](#understanding-the-alerting-setup)
+
+  * [Auto-Provisioned Alert Rules](#auto-provisioned-alert-rules)
+  * [Auto-Generated Dashboard](#auto-generated-dashboard)
+* [Behind the Scenes: YAML Snippets](#behind-the-scenes-yaml-snippets)
+
+  * [Prometheus Rule Example](#prometheus-rule-example)
+  * [Grafana Alerts Configuration Snippet](#grafana-alerts-configuration-snippet)
+* [Loki Configuration for Alerting](#loki-configuration-for-alerting)
+* [Creating Alerts in Grafana (Instructor Reference)](#creating-alerts-in-grafana-instructor-reference)
+
+  * [2. Creating an Alert for the Latency Panel](#2-creating-an-alert-for-the-latency-panel)
+  * [3. Creating Additional Alerts Based on SLOs](#3-creating-additional-alerts-based-on-slos)
+* [Important Note for Students](#important-note-for-students)
+* [Navigate to the Directory](#navigate-to-the-directory)
+* [Deployment](#deployment)
+* [Final Objective](#final-objective)
+* [Next Steps](#next-steps)
 
 ---
 
 ## **Overview**
 
-This exercise focuses on **alerting in Grafana** using **Loki** for log-based alerts and **Prometheus metrics** for monitoring **latency** and **errors**.  
+This exercise introduces the **alerting layer** of the observability stack, completing the monitoring pipeline with **real-time alert evaluation** using **Grafana**, **Prometheus**, and **Loki**.
 
-The goal is to:  
-✅ **Configure Loki's ruler component** to trigger alerts.  
-✅ **Create alerts for latency and errors** in the Grafana dashboard.  
-✅ **Define alert conditions based on Service Level Objectives (SLOs)**.  
-✅ **Send notifications** when thresholds are exceeded.  
+Students will NOT configure alerts manually. Instead, alerts are **automatically provisioned** when the environment is deployed. The focus is to understand how alerts are defined in YAML and evaluated inside Grafana.
+
+This aligns with real-world SRE practices where alerts are codified and managed via infrastructure-as-code rather than manual UI actions.
 
 ![Infrastructure](../exercise10/Infra.png)  
 
-The following configurations correspond to the **blue square** in the diagram above.  
+---
+
+## **Understanding the Alerting Setup**
+
+### **Auto-Provisioned Alert Rules**
+
+Alerts are defined in a JSON structure stored in a ConfigMap and mounted into Grafana. These rules are visible in the Grafana UI under **Alert rules**, but you don’t need to create or modify them.
+
+They’re evaluated automatically by Grafana.
 
 ---
 
-## **Navigate to the Directory**
+### **Auto-Generated Dashboard**
 
-Before proceeding, navigate to the correct directory:
+The dashboard includes panels for:
 
-```bash
-cd sre-abc-training/exercises/exercise12
+* Latency
+* Traffic (receive/transmit)
+* Application logs (Loki)
+* CPU and saturation metrics
+
+This dashboard is generated via `grafana-dashboards-config`, and is designed to visually surface the Golden Signals in real-time.
+
+---
+
+## **Behind the Scenes: YAML Snippets**
+
+### **Prometheus Rule Example**
+
+Defined in `prometheus.yaml` under:
+
+```yaml
+rule_files:
+  - "/etc/prometheus/rules/*.rules"
 ```
+
+This tells Prometheus to look for rule files (mounted via ConfigMap) for alert evaluation. These rules evaluate traffic and latency.
+
+---
+
+### **Grafana Alerts Configuration Snippet**
+
+From the `grafana-alerts-config` ConfigMap:
+
+```json
+{
+  "title": "Endpoint's latency lower than 1400 miliseconds",
+  "data": [
+    {
+      "refId": "A",
+      "expr": "sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)"
+    },
+    {
+      "refId": "C",
+      "expression": "A",
+      "type": "threshold",
+      "conditions": [
+        {
+          "evaluator": {
+            "type": "gt",
+            "params": [1400]
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+This shows that alerts are evaluated based on PromQL expressions, with thresholds coded into the JSON.
 
 ---
 
 ## **Loki Configuration for Alerting**
 
-Loki is a **log aggregation system** that enables **efficient querying and alerting based on log data**.  
-It integrates with **Grafana** to trigger alerts when log patterns match predefined rules.  
+Loki is a **log aggregation system** that enables **efficient querying and alerting based on log data**.
+It integrates with **Grafana** to trigger alerts when log patterns match predefined rules.
 
-🔹 **Why use Loki for alerting?**  
+🔹 **Why use Loki for alerting?**
 Unlike Prometheus, which focuses on **metrics**, Loki is optimized for **log-based alerts**. This is useful when monitoring **application logs for errors, anomalies, or service degradations**.
 
 ### **1. Configuring Loki for Alerting**
@@ -67,164 +133,173 @@ ruler:
   enable_api: true
 ```
 
-📌 **Explanation of settings**:  
-- **`ruler`** → Enables Loki's alerting functionality.  
-- **`storage.local.directory`** → Defines where alerting rules are stored.  
-- **`alertmanager_url`** → Sends alerts to **Alertmanager**, which handles notifications.  
-- **`enable_api`** → Allows managing alerting rules via the Loki API.  
+📌 **Explanation of settings**:
+
+* **`ruler`** → Enables Loki's alerting functionality.
+* **`storage.local.directory`** → Defines where alerting rules are stored.
+* **`alertmanager_url`** → Sends alerts to **Alertmanager**, which handles notifications.
+* **`enable_api`** → Allows managing alerting rules via the Loki API.
+
+> 💡 This is already configured via the `grafana-loki.yaml` file, so no manual changes are needed.
 
 ---
 
-## **Creating Alerts in Grafana**
+## **Creating Alerts in Grafana (Instructor Reference)**
 
-Grafana alerts notify users when **metrics exceed defined thresholds**.  
-Below, we configure alerts for **latency and errors**.
+> ⚠️ The following section is for **instructors only**. Students **should not** create alerts manually.
+> It exists to help instructors explain what happens behind the scenes when `cluster.sh` provisions alert rules.
+
+Grafana alerts notify users when **metrics exceed defined thresholds**. Below is an example of configuring alerts for latency and error rate.
 
 ### **2. Creating an Alert for the Latency Panel**
 
-1️⃣ **Open the Latency Panel**:  
-   - In **Grafana**, navigate to the **Latency panel**.  
+1. **Open the Latency Panel**:
 
-2️⃣ **Edit the Panel**:  
-   - Click on the panel title → **Edit**.  
+   * In **Grafana**, navigate to the **Latency panel**.
 
-3️⃣ **Go to the Alerts Tab**:  
-   - Switch to the **Alerts** tab in the panel editor.  
+2. **Edit the Panel**:
 
-4️⃣ **Define the Alert Condition**:  
-   - Use the following **Prometheus query** to monitor latency:  
+   * Click on the panel title → **Edit**.
 
-   ```promql
-   sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
-   ```
+3. **Go to the Alerts Tab**:
 
-   - **Set the evaluation period**: **Last 10 minutes**.  
+   * Switch to the **Alerts** tab in the panel editor.
 
-5️⃣ **Configure Expressions**:  
-   - **Input (A)**: Use the query above.  
-   - **Alert condition**: **Latency is above 1,400 ms** (1.4s).  
-
-6️⃣ **Set Evaluation Behavior**:  
-   - **Create a rule folder** (for better organization).  
-   - **Set evaluation interval** (how often the alert rule runs).  
-
-7️⃣ **Configure Labels and Notifications**:  
-   - Under **Contact point**, choose a **notification channel** (e.g., Slack, Email).  
-   - The default channel is `grafana-default-email`.  
-
-8️⃣ **Save the Alert**:  
-   - Click **Save** to enable the alert.  
-
-This will trigger a **notification when latency exceeds the defined threshold**, as shown below:
-
-![Grafana Alert](./images/grafana_test_alert.png)
-
----
-
-### **3. Creating Additional Alerts Based on SLOs**
-
-Following **SLO (Service Level Objective) definitions**, create additional alerts.
-
-🔹 **Alert 1: Endpoint Duration Above 1,400 ms**  
+4. **Define the Alert Condition**:
 
 ```promql
 sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
 ```
 
-📌 **Trigger Condition**: Alert if response time exceeds **1,400 ms**.
+5. **Configure the condition**:
+
+   * Evaluate if latency is above **1,400 ms** over the last 10 minutes.
+
+6. **Set evaluation interval and contact point**:
+
+   * Default channel is `grafana-default-email`.
+
+7. **Save and apply**
 
 ---
 
-🔹 **Alert 2: Low Network Traffic (Below 250,000 Bytes)**  
+### **3. Creating Additional Alerts Based on SLOs**
+
+These alerts are already defined and auto-provisioned. Still, here's what they look like:
+
+🔹 **Alert 1: High Latency**
+
+```promql
+sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
+```
+
+📌 Trigger if latency > 1,400 ms
+
+![Endpoint latency alert](./images/latency-alert.png)
+
+*Grafana alert rule using Prometheus metrics to monitor span latency.*
+
+🔹 **Alert 2: Low Network Traffic**
 
 ```promql
 sum(rate(container_network_receive_bytes_total[5m])) by (container_label_k8s_app)
 ```
 
-📌 **Trigger Condition**: Alert if received bytes drop below **250,000 bytes**.
+📌 Trigger if traffic < 250,000 bytes
 
----
+![Network traffic alert](./images/traffic-alert.png)
 
-🔹 **Alert 3: High Error Rate (> 5,500 Errors)**  
+*Grafana alert rule tracking low inbound network traffic using Prometheus.*
+
+🔹 **Alert 3: High Error Rate**
 
 ```promql
 sum(count_over_time({service_name="unknown_service"} |= "err" [5m])) by (service_name)
 ```
 
-📌 **Trigger Condition**: Alert if the number of **errors exceeds 5,500**.
+📌 Trigger if errors > 5,500
+
+![Availability must have less than 5500 errors](./images/availability-alert.png)
+
+*Grafana alert rule evaluating Loki logs for error count exceeding 5,500.*
+
+---
+
+## **Important Note for Students**
+
+> ⚠️ Do **not** attempt to create or edit alerts manually in Grafana. Everything has already been configured via YAML and provisioned by the script.
+>
+> This is intentional — to teach **infrastructure-as-code** alerting and reduce human error in real-world deployments.
+
+Instructors will walk through the YAML files during the session to explain how the alerting pipeline works.
+
+---
+
+## **Navigate to the Directory**
+
+Before starting, navigate to the working directory for this exercise:
+
+```bash
+cd sre-academy-training/exercises/exercise12
+```
 
 ---
 
 ## **Deployment**
 
-Before applying the new configuration, **clean up previous resources**:
+Run the following script to deploy the environment:
 
 ```bash
-#!/bin/bash
-
-kubectl delete ns application
-kubectl delete ns opentelemetry
-kubectl delete ns monitoring
-kubectl delete pv --all 
-kubectl delete pvc --all 
-sleep 5;
-echo "-------------------------------------------------------------------------"
-echo "Start creating"
-echo "-------------------------------------------------------------------------"
-kubectl apply -f ../exercise10/storage.yaml;
-kubectl apply -f ../exercise10/deployment.yaml;
-kubectl apply -f ../exercise10/otel-collector.yaml;
-kubectl apply -f ../exercise8/jaeger.yaml;
-kubectl apply -f ../exercise9/prometheus.yaml;
-kubectl apply -f ./grafana-loki.yaml;
-kubectl apply -f ./grafana.yaml;
-echo "-------------------------------------------------------------------------"
-echo "wait"
-echo "-------------------------------------------------------------------------"
-sleep 5;
-kubectl get pods -A
+./cluster.sh
 ```
 
----
+This will:
 
-## **Tip for Infrastructure as Code (IaC) with Ansible**
+* Launch Colima and Minikube.
+* Deploy the sample Python application.
+* Install Prometheus, Grafana, Loki, and OpenTelemetry Collector.
+* Provision Grafana dashboards and alert rules automatically.
 
-> [!TIP]
-> A more efficient **Infrastructure as Code (IaC)** approach can be implemented with Ansible.  
-> An [example](./infra.yaml) YAML playbook is available to automate deployment.
+After running `cluster.sh`, a dashboard named **Alerts** is created inside Grafana with pre-configured alert rules.
 
-Run the playbook:
+Go to the Grafana UI then navigate to:
 
-```bash
-ansible-playbook -i ../exercise4.1/ansible_quickstart/inventory.ini infra.yaml
-minikube service grafana-service -n monitoring
-```
+**Home > Dashboards > Alerts > Alert rules**
+
+You will find three pre-provisioned alert rules:
+
+| Alert Name              | Description                          | Threshold                |
+| ----------------------- | ------------------------------------ | ------------------------ |
+| **High Error Rate**     | Error count exceeds availability SLO | > 5,500 errors           |
+| **High Latency**        | Endpoint latency too high            | > 1,400 milliseconds     |
+| **Low Network Traffic** | Network input traffic dropped        | < 250,000 bytes received |
+
+These alerts simulate production-level thresholds tied to app metrics and logs.
 
 ---
 
 ## **Final Objective**
 
-At the end of this document, you should be able to:  
-✅ **Monitor latency and error rates using Grafana**.  
-✅ **Define and configure alerts based on SLOs**.  
-✅ **Receive notifications when thresholds are exceeded**.  
+At the end of this exercise, you should be able to:
 
-Here is a preview of the **alerting system in action**:  
+✅ Identify key alert thresholds and where they are defined.
+✅ Navigate to pre-configured alert rules in Grafana.
+✅ Understand how infrastructure-as-code defines alerts using ConfigMaps and JSON.
+✅ Interpret how alerts fit into SRE monitoring and reliability workflows.
 
-![Grafana Alert](images/grafana_test_alert.png)  
-
-As the application runs, **alerts will trigger** because the functions `goo`, `foo`, and `zoo` **simulate errors and service degradations**.
+This completes your exposure to all four pillars of observability: **Logs, Metrics, Traces, and Alerts.**
 
 ---
 
-## **Cleanup**
+## **Next Steps**
 
-To remove all resources:
+In [Exercise 13](../exercise13), we’ll shift focus from alerting to **automating incident response**. You’ll learn how to use **AWX** to trigger runbooks automatically when alerts fire in Grafana.
 
-```bash
-kubectl delete ns application opentelemetry monitoring
-kubectl delete pv --all
-kubectl delete pvc --all
-```
+You should now be confident with:
+
+* Understanding how metrics and logs trigger alerts.
+* Viewing and interpreting alert rules in the Grafana UI.
+* Connecting YAML-based alert rules to observable dashboards.
+* Trusting the full observability pipeline: **Logs + Metrics + Alerts**.
 
 ---
