@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: application
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sre-abc-training-app
+  namespace: application
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: sre-abc-training-app
+  template:
+    metadata:
+      labels:
+        app: sre-abc-training-app
+    spec:
+      containers:
+      - name: sre-abc-training-app
+        image: cguillenmendez/sre-abc-training-python-app:0.0.23
+        ports:
+        - containerPort: 5000
+        volumeMounts:
+        - name: log-volume
+          mountPath: /app/logs  # Mount the shared volume
+      volumes:
+      - name: log-volume
+        persistentVolumeClaim:
+          claimName: log-pvc  # Use the shared PVC
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: log-pvc
+  namespace: application
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 3Gi  # Must match the PV's size on storage.log-pv
+  storageClassName: ""  # Explicitly setting storageClassName to empty string
+  volumeName: log-pv-1  # Explicitly bind to the PV named "log-pv"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sre-abc-training-service
+  namespace: application
+spec:
+  type: NodePort
+  selector:
+    app: sre-abc-training-app
+  ports:
+  - port: 5000
+    targetPort: 5000
+    nodePort: 30007 # You can specify a different NodePort if desired
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: store-caller
+  namespace: application
+spec:
+  schedule: "*/1 * * * *"  # This is set to run every  minute
+  successfulJobsHistoryLimit: 3  # Keep only the last 3 successful job executions
+  failedJobsHistoryLimit: 1      # Optional: Keep only 1 failed job execution
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: curl-container
+            image: curlimages/curl:7.85.0  # Using curl to make HTTP requests
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                sleep 1;
+                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                sleep 1;
+                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                sleep 1;
+                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                sleep 1;
+                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                sleep 1;
+                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                sleep 1;
+          restartPolicy: Never  # Correct restart policy

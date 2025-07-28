@@ -1,0 +1,66 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: opentelemetry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+    spec:
+      containers:
+        - name: jaeger
+          image: jaegertracing/all-in-one:1.62.0
+          ports:
+            - containerPort: 16686  # Jaeger UI
+            - containerPort: 14268  # Jaeger HTTP Collector
+            - containerPort: 14250  # Jaeger gRPC for OTLP
+            - containerPort: 4317   # OTLP Receiver
+          args: ["--collector.otlp.enabled=true"]  # Enable OTLP gRPC receiver
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger
+  namespace: opentelemetry
+spec:
+  type: ClusterIP
+  ports:
+    - name: http-collector
+      port: 14268
+      targetPort: 14268
+      protocol: TCP
+    - name: grpc
+      port: 14250
+      targetPort: 14250
+      protocol: TCP
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+  selector:
+    app: jaeger
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-service
+  namespace: opentelemetry
+  labels:
+    app: jaeger
+spec:
+  selector:
+    app: jaeger
+  ports:
+    - name: ui
+      port: 16686
+      targetPort: 16686
+      protocol: TCP
+  type: NodePort
+---

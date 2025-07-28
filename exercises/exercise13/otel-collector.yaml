@@ -1,0 +1,123 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opentelemetry
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: log-pvc
+  namespace: opentelemetry
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 3Gi  # Must match the PV's size on storage.log-pv
+  storageClassName: ""  # Explicitly setting storageClassName to empty string
+  volumeName: log-pv-2  # Explicitly bind to the PV named "log-pv"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: opentelemetry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.111.0
+          args:
+            - "--config=/etc/otel-collector-config.yaml"
+          ports:
+            - containerPort: 4317
+          volumeMounts:
+            - name: otel-config
+              mountPath: /etc/otel-collector-config.yaml  # Mount the config as a file
+              subPath: config.yaml  # This points to the correct key in the ConfigMap
+            - name: log-volume
+              mountPath: /var/log/sre-app # Mount the shared volume
+      volumes:
+        - name: otel-config
+          configMap:
+            name: otel-config  # Reference the ConfigMap containing the configuration
+        - name: log-volume
+          persistentVolumeClaim:
+            claimName: log-pvc  # Use the shared PVC
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-config
+  namespace: opentelemetry
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+      filelog:
+        include: ["/var/log/sre-app/*.log"]  # Path to the log file
+        start_at: beginning # Start reading from the beginning of the files
+
+    exporters:
+      otlphttp/loki:
+        endpoint: http://loki.opentelemetry.svc.cluster.local:3100/otlp
+        tls:
+          insecure: true
+      otlp/jaeger:
+        endpoint: "jaeger:4317"  # Update to use the correct Jaeger endpoint
+        tls:
+          insecure: true
+      prometheus:
+        endpoint: "0.0.0.0:9464"  # Prometheus exporter for metrics
+        namespace: "otel_collector"  # Optional: Adds prefix to metric names
+    connectors:
+      spanmetrics:  # Processor to generate metrics from traces
+          namespace: span.metrics
+    processors:
+      batch: {}
+
+
+    service:
+        pipelines:
+            logs:
+                receivers: [otlp, filelog]
+                processors: [batch]
+                exporters: [otlphttp/loki]
+            traces: 
+                receivers: [otlp]
+                processors: [batch]
+                exporters: [otlp/jaeger, spanmetrics]
+            metrics:
+              receivers: [otlp, spanmetrics]
+              processors: [batch]
+              exporters: [prometheus]  # Send metrics to Prometheus
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: opentelemetry
+spec:
+  type: ClusterIP
+  ports:
+    - name: metrics
+      port: 9464
+      targetPort: 9464
+      protocol: TCP
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+  selector:
+    app: otel-collector
