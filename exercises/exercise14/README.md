@@ -122,14 +122,9 @@ Creating a Helm chart is like setting up a new software project—you're establi
 
 ### Navigate to the Exercise Directory
 
-**Why Directory Structure Matters:**
-All work for this exercise must be done in the correct subdirectory to ensure relative paths work correctly and your files are organized alongside the training materials.
-
 ```bash
 cd sre-academy-training/exercises/exercise14
 ```
-
-**Understanding the Path:** This path structure (`exercises/exercise14`) follows a common pattern in training environments where each exercise builds upon previous ones while maintaining clear separation of concerns.
 
 ### Create a New Helm Chart
 
@@ -182,7 +177,7 @@ rm -rf my-sre-app-chart/templates/*
 ### Add Required Manifests to the Chart
 
 **The Philosophy Behind This Step:**
-Instead of recreating manifests from scratch, we're reusing and organizing the battle-tested configurations you've developed in earlier exercises. This demonstrates a key DevOps principle: **reusability and iteration** rather than constant reinvention.
+Instead of recreating manifests from scratch, we're reusing and organizing the battle-tested configurations you've developed in earlier exercises. This demonstrates a key SRE principle: **reusability and iteration** rather than constant reinvention.
 
 ```bash
 cp ../exercise10/storage.yaml ../exercise10/deployment.yaml ../exercise10/otel-collector.yaml \
