@@ -1,474 +1,727 @@
-# **Automating a Runbook for Incident Reporting with AWX and Grafana**
+# Automating Incident Response with AWX and Grafana
 
-## **Table of Contents**
+## Table of Contents
 
-- [Introduction](#introduction)
-- [Navigate to Directory](#navigate-to-directory)
-- [Understanding Ansible, AWX, and Operators](#understanding-ansible-awx-and-operators)
-- [Installing AWX Operator Using Helm](#installing-awx-operator-using-helm)  
-- [Setting Up a Project and Runbook in Ansible AWX](#setting-up-a-project-and-runbook-in-ansible-awx)  
-- [Executing Ansible Scripts in AWX via REST API](#executing-ansible-scripts-in-awx-via-rest-api)  
-- [Configure Grafana to Trigger the AWX Job](#configure-grafana-to-trigger-the-awx-job)  
-- [Deployment](#deployment)  
-- [Tip for Infrastructure as Code (IaC) with Ansible](#tip-for-infrastructure-as-code-iac-with-ansible)  
+- [Learning Objectives](#learning-objectives)
+- [Navigate to the Directory](#navigate-to-the-directory)
+- [Part 1: Deploy Infrastructure (10 minutes)](#part-1-deploy-infrastructure-10-minutes)
+- [Part 2: Configure AWX Project and Runbook](#part-2-configure-awx-project-and-runbook)
+- [Part 3: API Integration Setup (10 minutes)](#part-3-api-integration-setup-10-minutes)
+- [Part 4: Configure Grafana Alerting (15 minutes)](#part-4-configure-grafana-alerting-15-minutes)
+- [Part 5: Test End-to-End Automation (10 minutes)](#part-5-test-end-to-end-automation-10-minutes)
+- [Troubleshooting](#troubleshooting)
 - [Final Objective](#final-objective)
-- [Cleanup](#cleanup)
+- [Next Steps](#next-steps)
 
 ---
 
-## **Introduction**
-In this exercise, we automate an **incident response runbook** using **AWX** and **Grafana alerts**.  
-Whenever an alert is triggered in **Grafana**, it will execute an **AWX job** to collect system status.  
+## Learning Objectives
 
-This setup improves **incident resolution** by:
-- Automatically gathering **diagnostics**.
-- Reducing **manual intervention**.
-- Shortening **Time to Resolution (TTR)**.
+By the end of this exercise, you will:
 
-### **Infrastructure Overview**
-![Infrastructure Diagram](./Infra.png)
+- Understand automated runbook execution concepts
+- Deploy AWX in a Kubernetes environment
+- Create and execute Ansible runbooks via AWX
+- Configure Grafana alerts to trigger AWX jobs automatically
+- Implement end-to-end automated incident response
 
 ---
 
-## **Navigate to Directory**
+## Navigate to the Directory
+
 Before proceeding, navigate to the correct directory:
 
 ```bash
-cd sre-abc-training/exercises/exercise13
+cd sre-academy-training/exercises/exercise13
 ```
 
 ---
 
-# What is a Runbook?
-A runbook is a structured document or automated script that provides step-by-step instructions to resolve specific operational tasks or incidents. In the context of Site Reliability Engineering (SRE), runbooks are invaluable for documenting:
+## Part 1: Deploy Infrastructure (10 minutes)
 
-- Common incident resolution steps.
-- Operational workflows.
-- Routine maintenance procedures.
+### Step 1: Automated Deployment
 
-Runbooks are designed to ensure consistency and reduce human error, enabling teams to respond more effectively to issues and perform repetitive tasks with greater reliability.
-
-## Automating Runbooks
-Automating runbooks transforms static instructions into dynamic, executable processes. Instead of relying on manual intervention, automated runbooks leverage tools and scripts to perform tasks with minimal human input. Automation can be achieved through scripting languages, orchestration tools, or platforms like Ansible.
-
-### Benefits of Automating Runbooks
-1. **Time to Detect (TTD):** Automated monitoring integrated with runbooks can identify issues and trigger actions immediately, reducing the delay between an issue occurring and it being detected.
-
-2. **Time to Acknowledge (TTA):** Automating notifications and initial responses can ensure that incidents are acknowledged faster, either by alerting the right team or initiating predefined actions.
-
-3. **Time to Resolve (TTR):** Automated steps within runbooks can:
-   - Execute diagnostic commands to gather relevant data.
-   - Perform common remediation actions (e.g., restarting services, clearing caches).
-   - Escalate unresolved issues with detailed logs and context.
-
-By automating runbooks, organizations can reduce downtime, improve incident response, and enhance overall system reliability.
-
-### Example Use Cases
-- **Incident Resolution:** Automatically restart a failing service or scale up resources during high traffic.
-- **Diagnostics:** Collect system logs and metrics when an alert is triggered.
-- **Routine Maintenance:** Automate tasks like database backups or clearing temporary files.
-
-### Sample Workflow
-1. **Monitoring System:** Detects an issue (e.g., high CPU usage).
-2. **Trigger:** The monitoring system triggers an alert and invokes an Ansible playbook.
-3. **Automated Runbook Execution:**
-   - Diagnoses the issue (e.g., collects logs).
-   - Applies a resolution (e.g., restarts the service).
-4. **Notification:** Sends a summary of actions taken to the on-call engineer.
-
----
-
-# Understanding Ansible, AWX, and Operators
-
-## What is Ansible?
-
-Ansible is an open-source automation tool designed for IT tasks like configuration management, application deployment, and orchestration. It uses a simple YAML-based language called Playbooks to define the desired state of your systems. Ansible is agentless, meaning it does not require any software installation on the target systems. Instead, it uses SSH or APIs for communication.
-
-## What are Kubernetes Operators vs Ansible Operators?
-
-### Kubernetes Operators
-Kubernetes Operators extend the Kubernetes API to manage complex, stateful applications. They encapsulate the operational knowledge of running an application in code, enabling automation of tasks like scaling, upgrading, and maintaining applications.
-
-Key features of Kubernetes Operators:
-- Written in languages like Go.
-- Deeply integrated with Kubernetes.
-- Provide domain-specific logic for managing Kubernetes resources.
-
-### Ansible Operators
-Ansible Operators are a type of Kubernetes Operator that use Ansible Playbooks and Roles to manage the lifecycle of Kubernetes applications. They leverage Ansible's simplicity and do not require custom Go code for implementation.
-
-Key features of Ansible Operators:
-- Use existing Ansible Playbooks for Kubernetes resource management.
-- Easier to write and maintain compared to traditional Kubernetes Operators.
-- Built using the Operator Framework, making it simpler to create operators for complex applications.
-
-## What is Ansible AWX?
-
-Ansible AWX is the open-source upstream project for **Red Hat Ansible Automation Platform**. It provides a web-based user interface, REST API, and task engine to manage and execute Ansible Playbooks at scale.
-
-Key features of AWX:
-- Centralized management for Ansible Playbooks, inventories, and credentials.
-- Role-based access control (RBAC) to define user permissions.
-- Visual job templates for managing automation tasks.
-- Integration with source control (e.g., Git) for Playbooks.
-
-AWX allows you to build, manage, and track automation tasks more effectively, and it serves as a foundation for enterprises looking to scale their automation efforts.
-
----
-
-## Summary
-
-| Concept              | Description                                                                                   |
-|----------------------|-----------------------------------------------------------------------------------------------|
-| **Ansible**          | Automation tool for managing IT tasks using YAML-based Playbooks.                            |
-| **Kubernetes Operator** | A Kubernetes-native way to automate application management, often written in Go.           |
-| **Ansible Operator** | A Kubernetes Operator that uses Ansible Playbooks instead of Go for application automation.   |
-| **Ansible AWX**      | Open-source UI and API for managing and scaling Ansible automation.                          |
-
-Ansible and its ecosystem provide versatile tools for both traditional IT environments and Kubernetes-based cloud-native applications.
-
----
-
-## Installing AWX Operator Using Helm
-
-Ansible can now be installed using the following commands:
+Run the provided script to deploy the complete infrastructure:
 
 ```bash
-brew install helm
-helm repo add awx-operator https://ansible-community.github.io/awx-operator-helm/
-helm install my-awx-operator awx-operator/awx-operator -n awx --create-namespace
+./cluster.sh
 ```
-Source: AWX Operator Helm Chart from https://ansible-community.github.io/awx-operator-helm/
 
-### Steps to Deploy AWX:
+**What this does:**
 
-1. Wait until the pod awx-operator-controller-manager-*** is in a running state.
+- Starts fresh Minikube cluster with increased resources
+- Deploys AWX operator and instance
+- Installs complete observability stack (Prometheus, Grafana, Jaeger, Loki)
+- Deploys sample application for monitoring
+
+### Step 2: Verify Deployment
+
+Wait for the script to complete, then verify all services are running:
+
 ```bash
-kubectl get pods -n awx
-```
-
-2. Apply the AWX Demo deployment:
-```bash
-kubectl apply -f awx-demo.yml
-```
-
-3. Wait for the awx-demo-service to become available:
-```bash
-kubectl get service awx-demo-service -n awx
-```
-
-4. Access the AWX service:
-```bash
-minikube service awx-demo-service -n awx
-```
-
-5. Retrieve the admin password:
-```bash
-kubectl get secret awx-demo-admin-password -o jsonpath="{.data.password}" -n awx | base64 --decode ; echo
-```
-
----
-
-# Setting Up a Project and Runbook in Ansible AWX
-
-This guide outlines the steps to create a project and an Ansible runbook (job template) in **Ansible AWX**, including how to integrate your project with a Git repository for automation.
-
-## Prerequisites
-
-- Ansible AWX is installed and running.
-- You have access to the AWX Web UI and API.
-- A Git repository (optional) to store your Ansible playbooks.
-
-## Step 1: Login to Ansible AWX
-
-1. Open your browser and navigate to the AWX web interface, typically at:
-``` bash
-minikube service awx-demo-service -n awx
-```
-
-2. Log in using your admin credentials:
-- **Username:** `admin`
-- **Password:** You can get the password from the Kubernetes secret (see previous step).
-```bash
-kubectl get secret awx-demo-admin-password -o jsonpath="{.data.password}" -n awx | base64 --decode ; echo
-```
-
-## Step 2: Create a New Project in AWX
-
-1. In the **AWX Web UI**, go to the **Projects** tab in the left-hand menu.
-
-2. Click the **+** button (or **Add** button) to create a new project.
-
-3. Fill out the required fields:
-- **Name:** `sre_project` (or any name of your choice)
-- **Organization:** Select an existing organization or create a new one.
-- **Source Control Type:** Select `Git` 
-- **Source Control URL:**  If using a Git repository, provide the URL to your Git repository containing your playbooks. For example:
-  ```
-  https://github.com/cguillencr/sre-abc-training
-  ```
-4. After filling out the fields, click **Save** to create the project.
-
-## Step 3: Create a New Runbook (Job Template)
-
-Step 3: Create a New Runbook (Job Template)
-A runbook, also known as a job template, defines the execution of a particular playbook. Here's how to create one:
-
-1. Go to the Job Templates tab in the left-hand menu of AWX.
-
-2. Click the + button (or Add button) to create a new job template.
-
-3. Fill out the required fields:
-
-- Name: `Restart application`
-- Job Type: Select `Run` (this indicates a job that will execute a playbook).
-- Inventory: Choose an inventory from the list (or create a new one if needed).
-- Project: Select the project you created in Step 2.
-- Playbook: Choose a playbook from the list of available playbooks in your project. If you linked a Git repository, it will list the playbooks from that repository. Use this one `exercises/exercise13/collect-status-application.yaml`
-- Credential: Select the credentials required for running the playbook (e.g., SSH key for remote hosts).
-4. Optionally, you can enable Limit (to specify which hosts to run the playbook on) and Extra Variables (to pass additional variables to your playbook).
-
-5. After filling out the fields, click Save to create the job template.
-
-![runbook](./images/runbook.png)
-
-## Step 4: Launch the Runbook (Job)
-
-Once the runbook is created, you can run it manually from the AWX Web UI.
-
-1. Go to the Job Templates tab.
-2. Find the job template you created in Step 3.
-3. Click the Launch button (a green triangle) to execute the playbook.
-The job will begin running, and you can monitor its progress on the Jobs page. The job logs will be displayed in real-time, showing the output from the playbook execution.
-
-## Step 5: Monitor and Review Job Status
-
-You can view the status of your job by going to the Jobs tab in AWX. It will display:
-
-The job status (e.g., successful, failed).
-The logs for the job execution.
-The duration of the job.
-If the job fails, you can view the logs for troubleshooting and error resolution.
-
----
-
-# Executing Ansible Scripts in AWX via REST API
-
-## Prerequisites
-
-### 1. Create an Application in AWX
-Before executing scripts, create an application to enable API access:
-
-1. Log in to the AWX web interface.
-2. Navigate to **Applications** under **Authentication**.
-3. Click **Add** to create a new application.
-4. Fill in the fields:
-   - **Name**: e.g., `API Access`
-   - **Organization**: Select your organization.  e.g., `Default`
-   - Enable **Client Type** as "Confidential" and **Authorization Grant Type** as "Resource owner password-based".
-5. Save the application to generate the Client ID and Secret.
-
-#### Example:
-In my case
-```bash
-Resource owner password-based
-Client ID SXGiXHj4KKFFwrm1lP4YwsGaMV2vP3lFly5hfSjZ
-
-Client Secret
-5UiVeTxwJw5ioStaGQxrWgCbQagHOFTBIYkBOWbi7MI3pyyWwFSLnWbowYwtVu5jc79DA0HqdCRM5QgHt6KgCojI5EWj5c7KUPje6T5pixOioSmV79vMtFV0BKewXfLg
-```
-### 2. Generate an Access Token
-
-1. Go to **Your Profile > Tokens > Create Token**.
-1.1 Use the application created above
-1.2 Use the writer permission
-2. Copy the generated token for API authentication.
-
-#### Example:
-In my case
-```bash
-Token
-wpSCyIlK1j8Dy8zM7wTmZ7bbkdgQVE
-
-Refresh Token
-Gfr2gKg5NC1QifTZqgA49fBAyuSCZx
-```
-
-### 3. Verify API Access
-Test connectivity with the AWX API using the token:
-```bash
-curl -H "Authorization: Bearer <your_token>" http://<awx_host>/api/v2/me/
-```
-
-#### Example:
-In my case
-```bash
-cristianguillenmendez@Cristians-MacBook-Pro exercise13 % curl -H "Authorization: Bearer wpSCyIlK1j8Dy8zM7wTmZ7bbkdgQVE" http://192.168.105.19:32728/api/v2/me/
-{"count":1,"next":null,"previous":null,"results":[{"id":1,"type":"user","url":"/api/v2/users/1/","related":{"teams":"/api/v2/users/1/teams/","organizations":"/api/v2/users/1/organizations/","admin_of_organizations":"/api/v2/users/1/admin_of_organizations/","projects":"/api/v2/users/1/projects/","credentials":"/api/v2/users/1/credentials/","roles":"/api/v2/users/1/roles/","activity_stream":"/api/v2/users/1/activity_stream/","access_list":"/api/v2/users/1/access_list/","tokens":"/api/v2/users/1/tokens/","authorized_tokens":"/api/v2/users/1/authorized_tokens/","personal_tokens":"/api/v2/users/1/personal_tokens/"},"summary_fields":{"resource":{"ansible_id":"90f9076d-8490-4f34-be5d-423ed3d706c2","resource_type":"shared.user"},"user_capabilities":{"edit":true,"delete":false}},"created":"2024-11-21T17:47:33.840697Z","modified":"2024-11-25T17:19:32.277001Z","username":"admin","first_name":"","last_name":"","email":"test@example.com","is_superuser":true,"is_system_auditor":false,"password":"$encrypted$","ldap_dn":"","last_login":"2024-11-25T17:19:32.277001Z","external_account":null,"auth":[]}]}
-```
-
----
-
-## Steps to Execute an Ansible Script via REST API
-
-### 1. Identify the Job Template
-List all Job Templates available in your AWX instance:
-```bash
-curl -H "Authorization: Bearer <your_token>" http://<awx_host>/api/v2/job_templates/
-```
-Find the `id` of the Job Template you want to execute.
-
-#### Example:
-```bash
-cristianguillenmendez@Cristians-MacBook-Pro exercise13 % curl -H "Authorization: Bearer wpSCyIlK1j8Dy8zM7wTmZ7bbkdgQVE" http://192.168.105.19:32728/api/v2/job_templates/
-{"count":5,"next":null,"previous":null,"results":[{"id":16,"type":"job_template","url":"/api/v2/job_templates/16/","related":{"created_by":"/api/v2/users/1/","modified_by":"/api/v2/users/1/","labels":"/api/v2/job_templates/16/labels/","project":"/api/v2/projects/12/","organization":"/api/v2/organizations/1/","credentials":"/api/v2/job_templates/16/credentials/","last_job":"/api/v2/jobs/52/","jobs":"/api/v2/job_templates/16/jobs/","schedules":"/api/v2/job_templates/16/schedules/","activity_stream":"/api/v2/job_templates/16/activity_stream/","launch":"/api/v2/job_templates/16/launch/","webhook_key":"/api/v2/job_templates/16/webhook_key/","webhook_receiver":"","notification_templates_started":"/api/v2/job_templates/16/notification_templates_started/","notification_templates_success":"/api/v2/job_templates/16/notification_templates_success/","notification_templates_error":"/api/v2/job_templates/16/notification_templates_error/","access_list":"/api/v2/job_templates/16/access_list/","survey_spec":"/api/v2/job_templates/16/survey_spec/","object_roles":"/api/v2/job_templates/16/object_roles/","instance_groups":"/api/v2/job_templates/16/instance_groups/","slice_workflow_jobs":"/api/v2/job_templates/16/slice_workflow_jobs/","copy":"/api/v2/job_templates/16/copy/"},"summary_fields":{"organization":{"id":1,"name":"Default","description":""},"project":{"id":12,"name":"sre_project","description":"","status":"successful","scm_type":"git","allow_override":false},"last_job":{"id":52,"name":"demo","description":"","finished":"2024-11-22T21:00:39.369618Z","status":"failed","failed":true},"last_update":{"id":52,"name":"demo","description":"","status":"failed","failed":true},"created_by":{"id":1,"username":"admin","first_name":"","last_name":""},"modified_by":{"id":1,"username":"admin","first_name":"","last_name":""},"object_roles":{"admin_role":{"description":"Can manage all aspects of the job template","name":"Admin","id":83},"execute_role":{"description":"May run the job template","name":"Execute","id":84},"read_role":{"description":"May view settings for the job template","name":"Read","id":85}},"user_capabilities":{"edit":true,"delete":true,"start":false,"schedule":false,"copy":false},"labels":{"count":0,"results":[]},"recent_jobs":[{"id":52,"status":"failed","finished":"2024-11-22T21:00:39.369618Z","canceled_on":null,"type":"job"}],"credentials":[{"id":4,"name":"Machine Host","description":"","kind":"ssh","cloud":false}]},"created":"2024-11-22T21:00:30.634466Z","modified":"2024-11-22T21:00:30.634473Z","name":"demo","description":"","job_type":"run","inventory":null,"project":12,"playbook":"exercises/exercise13/restart-application.yaml","scm_branch":"","forks":0,"limit":"","verbosity":0,"extra_vars":"---","job_tags":"","force_handlers":false,"skip_tags":"","start_at_task":"","timeout":0,"use_fact_cache":false,"organization":1,"last_job_run":"2024-11-22T21:00:39.369618Z","last_job_failed":true,"next_job_run":null,"status":"failed","execution_environment":null,"host_config_key":"","ask_scm_branch_on_launch":false,"ask_diff_mode_on_launch":false,"ask_variables_on_launch":false,"ask_limit_on_launch":false,"ask_tags_on_launch":false,"ask_skip_tags_on_launch":false,"ask_job_type_on_launch":false,"ask_verbosity_on_launch":false,"ask_inventory_on_launch":false,"ask_credential_on_launch":false,"ask_execution_environment_on_launch":false,"ask_labels_on_launch":false,"ask_forks_on_launch":false,"ask_job_slice_count_on_launch":false,"ask_timeout_on_launch":false,"ask_instance_groups_on_launch":false,"survey_enabled":false,"become_enabled":false,"diff_mode":false,"allow_simultaneous":false,"custom_virtualenv":null,"job_slice_count":1,"webhook_service":"","webhook_credential":null,"prevent_instance_group_fallback":false},{"id":7,"type":"job_template","url":"/api/v2/job_templates/7/","related":{"created_by":"/api/v2/users/1/","modified_by":"/api/v2/users/1/","labels":"/api/v2/job_templates/7/labels/","inventory":"/api/v2/inventories/1/","project":"/api/v2/projects/6/","organization":"/api/v2/organizations/1/","credentials":"/api/v2/job_templates/7/credentials/","last_job":"/api/v2/jobs/33/","jobs":"/api/v2/job_templates/7/jobs/","schedules":"/api/v2/job_templates/7/schedules/","activity_stream":"/api/v2/job_templates/7/activity_stream/","launch":"/api/v2/job_templates/7/launch/","webhook_key":"/api/v2/job_templates/7/webhook_key/","webhook_receiver":"","notification_templates_started":"/api/v2/job_templates/7/notification_templates_started/","notification_templates_success":"/api/v2/job_templates/7/notification_templates_success/","notification_templates_error":"/api/v2/job_templates/7/notification_templates_error/","access_list":"/api/v2/job_templates/7/access_list/","survey_spec":"/api/v2/job_templates/7/survey_spec/","object_roles":"/api/v2/job_templates/7/object_roles/","instance_groups":"/api/v2/job_templates/7/instance_groups/","slice_workflow_jobs":"/api/v2/job_templates/7/slice_workflow_jobs/","copy":"/api/v2/job_templates/7/copy/"},"summary_fields":{"organization":{"id":1,"name":"Default","description":""},"inventory":{"id":1,"name":"Demo Inventory","description":"","has_active_failures":true,"total_hosts":1,"hosts_with_active_failures":1,"total_groups":0,"has_inventory_sources":false,"total_inventory_sources":0,"inventory_sources_with_failures":0,"organization_id":1,"kind":""},"project":{"id":6,"name":"Demo Project","description":"","status":"successful","scm_type":"git","allow_override":false},"last_job":{"id":33,"name":"Demo Job Template","description":"","finished":"2024-11-22T17:10:12.222014Z","status":"successful","failed":false},"last_update":{"id":33,"name":"Demo Job Template","description":"","status":"successful","failed":false},"created_by":{"id":1,"username":"admin","first_name":"","last_name":""},"modified_by":{"id":1,"username":"admin","first_name":"","last_name":""},"object_roles":{"admin_role":{"description":"Can manage all aspects of the job template","name":"Admin","id":31},"execute_role":{"description":"May run the job template","name":"Execute","id":32},"read_role":{"description":"May view settings for the job template","name":"Read","id":33}},"user_capabilities":{"edit":true,"delete":true,"start":true,"schedule":true,"copy":true},"labels":{"count":0,"results":[]},"recent_jobs":[{"id":33,"status":"successful","finished":"2024-11-22T17:10:12.222014Z","canceled_on":null,"type":"job"}],"credentials":[]},"created":"2024-11-21T17:47:40.085884Z","modified":"2024-11-21T17:47:40.085890Z","name":"Demo Job Template","description":"","job_type":"run","inventory":1,"project":6,"playbook":"hello_world.yml","scm_branch":"","forks":0,"limit":"","verbosity":0,"extra_vars":"","job_tags":"","force_handlers":false,"skip_tags":"","start_at_task":"","timeout":0,"use_fact_cache":false,"organization":1,"last_job_run":"2024-11-22T17:10:12.222014Z","last_job_failed":false,"next_job_run":null,"status":"successful","execution_environment":null,"host_config_key":"","ask_scm_branch_on_launch":false,"ask_diff_mode_on_launch":false,"ask_variables_on_launch":false,"ask_limit_on_launch":false,"ask_tags_on_launch":false,"ask_skip_tags_on_launch":false,"ask_job_type_on_launch":false,"ask_verbosity_on_launch":false,"ask_inventory_on_launch":false,"ask_credential_on_launch":false,"ask_execution_environment_on_launch":false,"ask_labels_on_launch":false,"ask_forks_on_launch":false,"ask_job_slice_count_on_launch":false,"ask_timeout_on_launch":false,"ask_instance_groups_on_launch":false,"survey_enabled":false,"become_enabled":false,"diff_mode":false,"allow_simultaneous":false,"custom_virtualenv":null,"job_slice_count":1,"webhook_service":"","webhook_credential":null,"prevent_instance_group_fallback":false},{"id":15,"type":"job_template","url":"/api/v2/job_templates/15/","related":{"created_by":"/api/v2/users/1/","modified_by":"/api/v2/users/1/","labels":"/api/v2/job_templates/15/labels/","project":"/api/v2/projects/12/","organization":"/api/v2/organizations/1/","credentials":"/api/v2/job_templates/15/credentials/","last_job":"/api/v2/jobs/50/","jobs":"/api/v2/job_templates/15/jobs/","schedules":"/api/v2/job_templates/15/schedules/","activity_stream":"/api/v2/job_templates/15/activity_stream/","launch":"/api/v2/job_templates/15/launch/","webhook_key":"/api/v2/job_templates/15/webhook_key/","webhook_receiver":"","notification_templates_started":"/api/v2/job_templates/15/notification_templates_started/","notification_templates_success":"/api/v2/job_templates/15/notification_templates_success/","notification_templates_error":"/api/v2/job_templates/15/notification_templates_error/","access_list":"/api/v2/job_templates/15/access_list/","survey_spec":"/api/v2/job_templates/15/survey_spec/","object_roles":"/api/v2/job_templates/15/object_roles/","instance_groups":"/api/v2/job_templates/15/instance_groups/","slice_workflow_jobs":"/api/v2/job_templates/15/slice_workflow_jobs/","copy":"/api/v2/job_templates/15/copy/"},"summary_fields":{"organization":{"id":1,"name":"Default","description":""},"project":{"id":12,"name":"sre_project","description":"","status":"successful","scm_type":"git","allow_override":false},"last_job":{"id":50,"name":"restart","description":"","finished":"2024-11-22T20:48:13.657837Z","status":"failed","failed":true},"last_update":{"id":50,"name":"restart","description":"","status":"failed","failed":true},"created_by":{"id":1,"username":"admin","first_name":"","last_name":""},"modified_by":{"id":1,"username":"admin","first_name":"","last_name":""},"object_roles":{"admin_role":{"description":"Can manage all aspects of the job template","name":"Admin","id":77},"execute_role":{"description":"May run the job template","name":"Execute","id":78},"read_role":{"description":"May view settings for the job template","name":"Read","id":79}},"user_capabilities":{"edit":true,"delete":true,"start":false,"schedule":false,"copy":false},"labels":{"count":0,"results":[]},"recent_jobs":[{"id":50,"status":"failed","finished":"2024-11-22T20:48:13.657837Z","canceled_on":null,"type":"job"}],"credentials":[]},"created":"2024-11-22T20:48:07.456089Z","modified":"2024-11-22T20:48:07.456095Z","name":"restart","description":"","job_type":"run","inventory":null,"project":12,"playbook":"exercises/exercise13/restart-application.yaml","scm_branch":"","forks":0,"limit":"","verbosity":0,"extra_vars":"---","job_tags":"","force_handlers":false,"skip_tags":"","start_at_task":"","timeout":0,"use_fact_cache":false,"organization":1,"last_job_run":"2024-11-22T20:48:13.657837Z","last_job_failed":true,"next_job_run":null,"status":"failed","execution_environment":null,"host_config_key":"","ask_scm_branch_on_launch":false,"ask_diff_mode_on_launch":false,"ask_variables_on_launch":false,"ask_limit_on_launch":false,"ask_tags_on_launch":false,"ask_skip_tags_on_launch":false,"ask_job_type_on_launch":false,"ask_verbosity_on_launch":false,"ask_inventory_on_launch":false,"ask_credential_on_launch":false,"ask_execution_environment_on_launch":false,"ask_labels_on_launch":false,"ask_forks_on_launch":false,"ask_job_slice_count_on_launch":false,"ask_timeout_on_launch":false,"ask_instance_groups_on_launch":false,"survey_enabled":false,"become_enabled":false,"diff_mode":false,"allow_simultaneous":false,"custom_virtualenv":null,"job_slice_count":1,"webhook_service":"","webhook_credential":null,"prevent_instance_group_fallback":false},{"id":11,"type":"job_template","url":"/api/v2/job_templates/11/","related":{"created_by":"/api/v2/users/1/","modified_by":"/api/v2/users/1/","labels":"/api/v2/job_templates/11/labels/","inventory":"/api/v2/inventories/1/","organization":"/api/v2/organizations/1/","credentials":"/api/v2/job_templates/11/credentials/","jobs":"/api/v2/job_templates/11/jobs/","schedules":"/api/v2/job_templates/11/schedules/","activity_stream":"/api/v2/job_templates/11/activity_stream/","launch":"/api/v2/job_templates/11/launch/","webhook_key":"/api/v2/job_templates/11/webhook_key/","webhook_receiver":"","notification_templates_started":"/api/v2/job_templates/11/notification_templates_started/","notification_templates_success":"/api/v2/job_templates/11/notification_templates_success/","notification_templates_error":"/api/v2/job_templates/11/notification_templates_error/","access_list":"/api/v2/job_templates/11/access_list/","survey_spec":"/api/v2/job_templates/11/survey_spec/","object_roles":"/api/v2/job_templates/11/object_roles/","instance_groups":"/api/v2/job_templates/11/instance_groups/","slice_workflow_jobs":"/api/v2/job_templates/11/slice_workflow_jobs/","copy":"/api/v2/job_templates/11/copy/"},"summary_fields":{"organization":{"id":1,"name":"Default","description":""},"inventory":{"id":1,"name":"Demo Inventory","description":"","has_active_failures":true,"total_hosts":1,"hosts_with_active_failures":1,"total_groups":0,"has_inventory_sources":false,"total_inventory_sources":0,"inventory_sources_with_failures":0,"organization_id":1,"kind":""},"created_by":{"id":1,"username":"admin","first_name":"","last_name":""},"modified_by":{"id":1,"username":"admin","first_name":"","last_name":""},"object_roles":{"admin_role":{"description":"Can manage all aspects of the job template","name":"Admin","id":51},"execute_role":{"description":"May run the job template","name":"Execute","id":52},"read_role":{"description":"May view settings for the job template","name":"Read","id":53}},"user_capabilities":{"edit":true,"delete":true,"start":false,"schedule":false,"copy":false},"labels":{"count":0,"results":[]},"recent_jobs":[],"credentials":[]},"created":"2024-11-21T21:57:09.835951Z","modified":"2024-11-21T21:57:09.835970Z","name":"Restart application","description":"","job_type":"run","inventory":1,"project":null,"playbook":"","scm_branch":"","forks":0,"limit":"","verbosity":0,"extra_vars":"---","job_tags":"","force_handlers":false,"skip_tags":"","start_at_task":"","timeout":0,"use_fact_cache":false,"organization":1,"last_job_run":"2024-11-21T21:57:21.522360Z","last_job_failed":true,"next_job_run":null,"status":"failed","execution_environment":null,"host_config_key":"","ask_scm_branch_on_launch":false,"ask_diff_mode_on_launch":false,"ask_variables_on_launch":false,"ask_limit_on_launch":false,"ask_tags_on_launch":false,"ask_skip_tags_on_launch":false,"ask_job_type_on_launch":false,"ask_verbosity_on_launch":false,"ask_inventory_on_launch":false,"ask_credential_on_launch":false,"ask_execution_environment_on_launch":false,"ask_labels_on_launch":false,"ask_forks_on_launch":false,"ask_job_slice_count_on_launch":false,"ask_timeout_on_launch":false,"ask_instance_groups_on_launch":false,"survey_enabled":false,"become_enabled":false,"diff_mode":false,"allow_simultaneous":false,"custom_virtualenv":null,"job_slice_count":1,"webhook_service":"","webhook_credential":null,"prevent_instance_group_fallback":false},{"id":13,"type":"job_template","url":"/api/v2/job_templates/13/","related":{"created_by":"/api/v2/users/1/","modified_by":"/api/v2/users/1/","labels":"/api/v2/job_templates/13/labels/","inventory":"/api/v2/inventories/1/","project":"/api/v2/projects/12/","organization":"/api/v2/organizations/1/","credentials":"/api/v2/job_templates/13/credentials/","last_job":"/api/v2/jobs/60/","execution_environment":"/api/v2/execution_environments/3/","jobs":"/api/v2/job_templates/13/jobs/","schedules":"/api/v2/job_templates/13/schedules/","activity_stream":"/api/v2/job_templates/13/activity_stream/","launch":"/api/v2/job_templates/13/launch/","webhook_key":"/api/v2/job_templates/13/webhook_key/","webhook_receiver":"","notification_templates_started":"/api/v2/job_templates/13/notification_templates_started/","notification_templates_success":"/api/v2/job_templates/13/notification_templates_success/","notification_templates_error":"/api/v2/job_templates/13/notification_templates_error/","access_list":"/api/v2/job_templates/13/access_list/","survey_spec":"/api/v2/job_templates/13/survey_spec/","object_roles":"/api/v2/job_templates/13/object_roles/","instance_groups":"/api/v2/job_templates/13/instance_groups/","slice_workflow_jobs":"/api/v2/job_templates/13/slice_workflow_jobs/","copy":"/api/v2/job_templates/13/copy/"},"summary_fields":{"organization":{"id":1,"name":"Default","description":""},"inventory":{"id":1,"name":"Demo Inventory","description":"","has_active_failures":true,"total_hosts":1,"hosts_with_active_failures":1,"total_groups":0,"has_inventory_sources":false,"total_inventory_sources":0,"inventory_sources_with_failures":0,"organization_id":1,"kind":""},"execution_environment":{"id":3,"name":"Control Plane Execution Environment","description":"","image":"quay.io/ansible/awx-ee:24.6.1"},"project":{"id":12,"name":"sre_project","description":"","status":"successful","scm_type":"git","allow_override":false},"last_job":{"id":60,"name":"Restart application1","description":"","finished":"2024-11-25T15:34:00.247059Z","status":"failed","failed":true},"last_update":{"id":60,"name":"Restart application1","description":"","status":"failed","failed":true},"created_by":{"id":1,"username":"admin","first_name":"","last_name":""},"modified_by":{"id":1,"username":"admin","first_name":"","last_name":""},"object_roles":{"admin_role":{"description":"Can manage all aspects of the job template","name":"Admin","id":58},"execute_role":{"description":"May run the job template","name":"Execute","id":59},"read_role":{"description":"May view settings for the job template","name":"Read","id":60}},"user_capabilities":{"edit":true,"delete":true,"start":true,"schedule":true,"copy":true},"labels":{"count":0,"results":[]},"recent_jobs":[{"id":60,"status":"failed","finished":"2024-11-25T15:34:00.247059Z","canceled_on":null,"type":"job"},{"id":54,"status":"failed","finished":"2024-11-22T21:03:59.374605Z","canceled_on":null,"type":"job"},{"id":47,"status":"failed","finished":"2024-11-22T17:38:16.785048Z","canceled_on":null,"type":"job"},{"id":44,"status":"failed","finished":"2024-11-22T17:28:20.320449Z","canceled_on":null,"type":"job"},{"id":42,"status":"failed","finished":"2024-11-22T17:22:34.971288Z","canceled_on":null,"type":"job"},{"id":40,"status":"failed","finished":"2024-11-22T17:20:31.417373Z","canceled_on":null,"type":"job"},{"id":38,"status":"failed","finished":"2024-11-22T17:16:25.153333Z","canceled_on":null,"type":"job"},{"id":36,"status":"failed","finished":"2024-11-22T17:12:54.281207Z","canceled_on":null,"type":"job"},{"id":32,"status":"failed","finished":"2024-11-22T16:26:53.670980Z","canceled_on":null,"type":"job"},{"id":31,"status":"failed","finished":"2024-11-22T16:25:37.016297Z","canceled_on":null,"type":"job"}],"credentials":[{"id":4,"name":"Machine Host","description":"","kind":"ssh","cloud":false}]},"created":"2024-11-21T22:00:35.517625Z","modified":"2024-11-22T21:03:52.375950Z","name":"Restart application1","description":"","job_type":"run","inventory":1,"project":12,"playbook":"exercises/exercise13/restart-application.yaml","scm_branch":"","forks":0,"limit":"","verbosity":1,"extra_vars":"---","job_tags":"","force_handlers":false,"skip_tags":"","start_at_task":"","timeout":0,"use_fact_cache":false,"organization":1,"last_job_run":"2024-11-25T15:34:00.247059Z","last_job_failed":true,"next_job_run":null,"status":"failed","execution_environment":3,"host_config_key":"","ask_scm_branch_on_launch":false,"ask_diff_mode_on_launch":false,"ask_variables_on_launch":false,"ask_limit_on_launch":false,"ask_tags_on_launch":false,"ask_skip_tags_on_launch":false,"ask_job_type_on_launch":false,"ask_verbosity_on_launch":false,"ask_inventory_on_launch":false,"ask_credential_on_launch":false,"ask_execution_environment_on_launch":false,"ask_labels_on_launch":false,"ask_forks_on_launch":false,"ask_job_slice_count_on_launch":false,"ask_timeout_on_launch":false,"ask_instance_groups_on_launch":false,"survey_enabled":false,"become_enabled":false,"diff_mode":false,"allow_simultaneous":false,"custom_virtualenv":null,"job_slice_count":1,"webhook_service":"","webhook_credential":null,"prevent_instance_group_fallback":false}]}
-```
-
-### 2. Launch the Job Template
-Use the Job Template ID to launch the job:
-```bash
-curl -X POST -H "Authorization: Bearer <your_token>" \
-     -H "Content-Type: application/json" \
-     -d '{}' \
-     http://<awx_host>/api/v2/job_templates/<job_template_id>/launch/
-```
-#### Example:
-```bash
-cristianguillenmendez@Cristians-MacBook-Pro exercise13 % curl -X POST -H "Authorization: Bearer wpSCyIlK1j8Dy8zM7wTmZ7bbkdgQVE" \
-     -H "Content-Type: application/json" \
-     -d '{}' \
-     http://192.168.105.19:32728/api/v2/job_templates/13/launch/
-{"job":61,"ignored_fields":{},"id":61,"type":"job","url":"/api/v2/jobs/61/","related":{"created_by":"/api/v2/users/1/","modified_by":"/api/v2/users/1/","labels":"/api/v2/jobs/61/labels/","inventory":"/api/v2/inventories/1/","project":"/api/v2/projects/12/","organization":"/api/v2/organizations/1/","credentials":"/api/v2/jobs/61/credentials/","unified_job_template":"/api/v2/job_templates/13/","stdout":"/api/v2/jobs/61/stdout/","execution_environment":"/api/v2/execution_environments/3/","job_events":"/api/v2/jobs/61/job_events/","job_host_summaries":"/api/v2/jobs/61/job_host_summaries/","activity_stream":"/api/v2/jobs/61/activity_stream/","notifications":"/api/v2/jobs/61/notifications/","create_schedule":"/api/v2/jobs/61/create_schedule/","job_template":"/api/v2/job_templates/13/","cancel":"/api/v2/jobs/61/cancel/","relaunch":"/api/v2/jobs/61/relaunch/"},"summary_fields":{"organization":{"id":1,"name":"Default","description":""},"inventory":{"id":1,"name":"Demo Inventory","description":"","has_active_failures":true,"total_hosts":1,"hosts_with_active_failures":1,"total_groups":0,"has_inventory_sources":false,"total_inventory_sources":0,"inventory_sources_with_failures":0,"organization_id":1,"kind":""},"execution_environment":{"id":3,"name":"Control Plane Execution Environment","description":"","image":"quay.io/ansible/awx-ee:24.6.1"},"project":{"id":12,"name":"sre_project","description":"","status":"successful","scm_type":"git","allow_override":false},"job_template":{"id":13,"name":"Restart application1","description":""},"unified_job_template":{"id":13,"name":"Restart application1","description":"","unified_job_type":"job"},"created_by":{"id":1,"username":"admin","first_name":"","last_name":""},"modified_by":{"id":1,"username":"admin","first_name":"","last_name":""},"user_capabilities":{"delete":true,"start":true},"labels":{"count":0,"results":[]},"credentials":[{"id":4,"name":"Machine Host","description":"","kind":"ssh","cloud":false}]},"created":"2024-11-25T17:48:34.130168Z","modified":"2024-11-25T17:48:34.152865Z","name":"Restart application1","description":"","job_type":"run","inventory":1,"project":12,"playbook":"exercises/exercise13/restart-application.yaml","scm_branch":"","forks":0,"limit":"","verbosity":1,"extra_vars":"{}","job_tags":"","force_handlers":false,"skip_tags":"","start_at_task":"","timeout":0,"use_fact_cache":false,"organization":1,"unified_job_template":13,"launch_type":"manual","status":"pending","execution_environment":3,"failed":false,"started":null,"finished":null,"canceled_on":null,"elapsed":0.0,"job_args":"","job_cwd":"","job_env":{},"job_explanation":"","execution_node":"","controller_node":"","result_traceback":"","event_processing_finished":false,"launched_by":{"id":1,"name":"admin","type":"user","url":"/api/v2/users/1/"},"work_unit_id":null,"job_template":13,"passwords_needed_to_start":[],"allow_simultaneous":false,"artifacts":{},"scm_revision":"","instance_group":null,"diff_mode":false,"job_slice_number":0,"job_slice_count":1,"webhook_service":"","webhook_credential":null,"webhook_guid":""}
-```
-
-### 3. Monitor Job Status
-After launching a job, get the job ID from the launch response. Use it to monitor the job status:
-```bash
-curl -H "Authorization: Bearer <your_token>" http://<awx_host>/api/v2/jobs/<job_id>/
-```
-
-The `status` field will indicate the job’s progress (`pending`, `running`, `successful`, `failed`, etc.).
-
-#### Example:
-```bash
-cristianguillenmendez@Cristians-MacBook-Pro exercise13 % curl -H "Authorization: Bearer wpSCyIlK1j8Dy8zM7wTmZ7bbkdgQVE" \
-     http://192.168.105.19:32728/api/v2/jobs/61/
-{"id":61,"type":"job","url":"/api/v2/jobs/61/","related":{"created_by":"/api/v2/users/1/","labels":"/api/v2/jobs/61/labels/","inventory":"/api/v2/inventories/1/","project":"/api/v2/projects/12/","organization":"/api/v2/organizations/1/","credentials":"/api/v2/jobs/61/credentials/","unified_job_template":"/api/v2/job_templates/13/","stdout":"/api/v2/jobs/61/stdout/","execution_environment":"/api/v2/execution_environments/3/","job_events":"/api/v2/jobs/61/job_events/","job_host_summaries":"/api/v2/jobs/61/job_host_summaries/","activity_stream":"/api/v2/jobs/61/activity_stream/","notifications":"/api/v2/jobs/61/notifications/","create_schedule":"/api/v2/jobs/61/create_schedule/","job_template":"/api/v2/job_templates/13/","cancel":"/api/v2/jobs/61/cancel/","relaunch":"/api/v2/jobs/61/relaunch/"},"summary_fields":{"organization":{"id":1,"name":"Default","description":""},"inventory":{"id":1,"name":"Demo Inventory","description":"","has_active_failures":true,"total_hosts":1,"hosts_with_active_failures":1,"total_groups":0,"has_inventory_sources":false,"total_inventory_sources":0,"inventory_sources_with_failures":0,"organization_id":1,"kind":""},"execution_environment":{"id":3,"name":"Control Plane Execution Environment","description":"","image":"quay.io/ansible/awx-ee:24.6.1"},"project":{"id":12,"name":"sre_project","description":"","status":"successful","scm_type":"git","allow_override":false},"job_template":{"id":13,"name":"Restart application1","description":""},"unified_job_template":{"id":13,"name":"Restart application1","description":"","unified_job_type":"job"},"instance_group":{"id":2,"name":"default","is_container_group":true},"created_by":{"id":1,"username":"admin","first_name":"","last_name":""},"user_capabilities":{"delete":true,"start":true},"labels":{"count":0,"results":[]},"credentials":[{"id":4,"name":"Machine Host","description":"","kind":"ssh","cloud":false}]},"created":"2024-11-25T17:48:34.130168Z","modified":"2024-11-25T17:48:34.250619Z","name":"Restart application1","description":"","job_type":"run","inventory":1,"project":12,"playbook":"exercises/exercise13/restart-application.yaml","scm_branch":"","forks":0,"limit":"","verbosity":1,"extra_vars":"{}","job_tags":"","force_handlers":false,"skip_tags":"","start_at_task":"","timeout":0,"use_fact_cache":false,"organization":1,"unified_job_template":13,"launch_type":"manual","status":"failed","execution_environment":3,"failed":true,"started":"2024-11-25T17:48:34.269855Z","finished":"2024-11-25T17:48:39.248861Z","canceled_on":null,"elapsed":4.979,"job_args":"[\"ssh-agent\", \"sh\", \"-c\", \"trap 'rm -f /runner/artifacts/61/ssh_key_data' EXIT && ssh-add /runner/artifacts/61/ssh_key_data && rm -f /runner/artifacts/61/ssh_key_data && ansible-playbook -u cristianguillenmendez -v -i /runner/inventory/hosts -e @/runner/env/extravars exercises/exercise13/restart-application.yaml\"]","job_cwd":"/runner/project","job_env":{"PWD":"/runner","HOME":"/runner","PATH":"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","SHLVL":"0","JOB_ID":"61","AWX_HOST":"https://towerhost","HOSTNAME":"automation-job-61-ttz44","LC_CTYPE":"C.UTF-8","INVENTORY_ID":"1","MAX_EVENT_RES":"700000","KUBERNETES_PORT":"tcp://10.96.0.1:443","PROJECT_REVISION":"5fc4870cccbd9be01b9560463ef2171b62b8b9b4","ANSIBLE_ROLES_PATH":"/runner/requirements_roles:~/.ansible/roles:/usr/share/ansible/roles:/etc/ansible/roles","RUNNER_OMIT_EVENTS":"False","ANSIBLE_FORCE_COLOR":"True","AWX_PRIVATE_DATA_DIR":"/tmp/awx_61_ifxztvul","AWX_DEMO_SERVICE_PORT":"tcp://10.103.35.163:80","AWX_ISOLATED_DATA_DIR":"/runner/artifacts/61","ANSIBLE_BASE_TEAM_MODEL":"main.Team","ANSIBLE_STDOUT_CALLBACK":"awx_display","KUBERNETES_PORT_443_TCP":"tcp://10.96.0.1:443","KUBERNETES_SERVICE_HOST":"10.96.0.1","KUBERNETES_SERVICE_PORT":"443","ANSIBLE_CALLBACK_PLUGINS":"/usr/local/lib/python3.9/site-packages/ansible_runner/display_callback/callback","ANSIBLE_COLLECTIONS_PATH":"/runner/requirements_collections:~/.ansible/collections:/usr/share/ansible/collections","ANSIBLE_COLLECTIONS_PATHS":"/runner/requirements_collections:~/.ansible/collections:/usr/share/ansible/collections","ANSIBLE_HOST_KEY_CHECKING":"False","PIP_BREAK_SYSTEM_PACKAGES":"1","RUNNER_ONLY_FAILED_EVENTS":"False","ANSIBLE_BASE_ROLE_PRECREATE":"{}","ANSIBLE_RETRY_FILES_ENABLED":"False","ANSIBLE_SSH_CONTROL_PATH_DIR":"/runner/cp","AWX_DEMO_SERVICE_PORT_80_TCP":"tcp://10.103.35.163:80","KUBERNETES_PORT_443_TCP_ADDR":"10.96.0.1","KUBERNETES_PORT_443_TCP_PORT":"443","ANSIBLE_BASE_ALL_REST_FILTERS":"('ansible_base.rest_filters.rest_framework.type_filter_backend.TypeFilterBackend', 'ansible_base.rest_filters.rest_framework.field_lookup_backend.FieldLookupBackend', 'rest_framework.filters.SearchFilter', 'ansible_base.rest_filters.rest_framework.order_backend.OrderByBackend')","ANSIBLE_BASE_CREATOR_DEFAULTS":"['change', 'delete', 'execute', 'use', 'adhoc', 'approve', 'update', 'view']","ANSIBLE_BASE_PERMISSION_MODEL":"main.Permission","AWX_DEMO_SERVICE_SERVICE_HOST":"10.103.35.163","AWX_DEMO_SERVICE_SERVICE_PORT":"80","KUBERNETES_PORT_443_TCP_PROTO":"tcp","KUBERNETES_SERVICE_PORT_HTTPS":"443","ANSIBLE_BASE_ROLE_CREATOR_NAME":"{cls.__name__} Creator","ANSIBLE_BASE_ALLOW_CUSTOM_ROLES":"True","ANSIBLE_BASE_ALLOW_TEAM_PARENTS":"True","ANSIBLE_BASE_CUSTOM_VIEW_PARENT":"awx.api.generics.APIView","ANSIBLE_BASE_ORGANIZATION_MODEL":"main.Organization","ANSIBLE_BASE_BYPASS_ACTION_FLAGS":"{}","ANSIBLE_BASE_ALLOW_TEAM_ORG_ADMIN":"False","ANSIBLE_BASE_ALLOW_TEAM_ORG_PERMS":"True","ANSIBLE_INVENTORY_UNPARSED_FAILED":"True","ANSIBLE_PARAMIKO_RECORD_HOST_KEYS":"False","AWX_DEMO_SERVICE_PORT_80_TCP_ADDR":"10.103.35.163","AWX_DEMO_SERVICE_PORT_80_TCP_PORT":"80","ANSIBLE_BASE_ALLOW_TEAM_ORG_MEMBER":"False","ANSIBLE_BASE_MANAGED_ROLE_REGISTRY":"{}","ANSIBLE_BASE_ROLE_SYSTEM_ACTIVATED":"True","AWX_DEMO_SERVICE_PORT_80_TCP_PROTO":"tcp","AWX_DEMO_SERVICE_SERVICE_PORT_HTTP":"80","ANSIBLE_BASE_BYPASS_SUPERUSER_FLAGS":"['is_superuser']","ANSIBLE_BASE_RESOURCE_CONFIG_MODULE":"awx.resource_api","ANSIBLE_BASE_ALLOW_CUSTOM_TEAM_ROLES":"False","ANSIBLE_BASE_CACHE_PARENT_PERMISSIONS":"True","ANSIBLE_BASE_ALLOW_SINGLETON_ROLES_API":"False","ANSIBLE_BASE_CHECK_RELATED_PERMISSIONS":"['use', 'change', 'view']","ANSIBLE_BASE_ALLOW_SINGLETON_TEAM_ROLES":"False","ANSIBLE_BASE_ALLOW_SINGLETON_USER_ROLES":"True","ANSIBLE_BASE_REST_FILTERS_RESERVED_NAMES":"('page', 'page_size', 'format', 'order', 'order_by', 'search', 'type', 'host_filter', 'count_disabled', 'no_truncate', 'limit', 'validate')","ANSIBLE_BASE_EVALUATIONS_IGNORE_CONFLICTS":"True","AWX_OPERATOR_CONTROLLER_MANAGER_METRICS_SERVICE_PORT":"tcp://10.110.254.131:8443","AWX_OPERATOR_CONTROLLER_MANAGER_METRICS_SERVICE_SERVICE_HOST":"10.110.254.131","AWX_OPERATOR_CONTROLLER_MANAGER_METRICS_SERVICE_SERVICE_PORT":"8443","AWX_OPERATOR_CONTROLLER_MANAGER_METRICS_SERVICE_PORT_8443_TCP":"tcp://10.110.254.131:8443","AWX_OPERATOR_CONTROLLER_MANAGER_METRICS_SERVICE_PORT_8443_TCP_ADDR":"10.110.254.131","AWX_OPERATOR_CONTROLLER_MANAGER_METRICS_SERVICE_PORT_8443_TCP_PORT":"8443","AWX_OPERATOR_CONTROLLER_MANAGER_METRICS_SERVICE_SERVICE_PORT_HTTPS":"8443","AWX_OPERATOR_CONTROLLER_MANAGER_METRICS_SERVICE_PORT_8443_TCP_PROTO":"tcp"},"job_explanation":"","execution_node":"","controller_node":"awx-demo-task-76ffcd58c-crjzm","result_traceback":"","event_processing_finished":true,"launched_by":{"id":1,"name":"admin","type":"user","url":"/api/v2/users/1/"},"work_unit_id":"VMSY697c","job_template":13,"passwords_needed_to_start":[],"allow_simultaneous":false,"artifacts":{},"scm_revision":"5fc4870cccbd9be01b9560463ef2171b62b8b9b4","instance_group":2,"diff_mode":false,"job_slice_number":0,"job_slice_count":1,"webhook_service":"","webhook_credential":null,"webhook_guid":"","host_status_counts":{"failures":1},"playbook_counts":{"play_count":1,"task_count":2},"custom_virtualenv":null}
-```
-
----
-
-## **Configure Grafana to Trigger the AWX Job**
-
-### Step 1: Add a Contact Point in Grafana
-1. Open **Grafana** and go to **Alerting → + New alert rule**.
-1.1 Name: **Endpoint's latency lower than 1400 miliseconds**
-1.2 A: **sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)**
-1.3 C: Input: **A** IS BOVE **1**
-1.4 Click preview
-![grafana alert preview](./images/grafana-alert-preview.png)
-2. Click Contact point and select **Job to collect information**.
-3. Save rule and exit
-![grafana alert preview contact point](./images/grafana-alert-preview-contact-point.png)
-
----
-
-# Deployment
-Before deploy all the new staff it's important to clean the changes from the previous exercises and then apply the new settings wih short program like this one:
-```bash
-#!/bin/bash
-#!/bin/bash
-
-kubectl delete ns awx
-kubectl delete ns application
-kubectl delete ns opentelemetry
-kubectl delete ns monitoring
-kubectl delete pv --all 
-kubectl delete pvc --all 
-sleep 5;
-
-echo "-------------------------------------------------------------------------"
-echo "Install AWX"
-echo "-------------------------------------------------------------------------"
-
-brew install helm
-helm repo add awx-operator https://ansible-community.github.io/awx-operator-helm/
-helm install my-awx-operator awx-operator/awx-operator -n awx --create-namespace
-
-
-echo "-------------------------------------------------------------------------"
-echo "Configure AWX"
-echo "-------------------------------------------------------------------------"
-
-
-kubectl get pods -n awx #  awx-operator-controller-manager-*** is in a running state.
-kubectl apply -f awx-demo.yaml
-kubectl get service awx-demo-service -n awx #Wait for the awx-demo-service to become available: It could take someminutes
-sleep 2;
+# Check all pods are running (should see ~20+ pods across multiple namespaces)
 kubectl get pods -A
-minikube service awx-demo-service -n awx
-kubectl get secret awx-demo-admin-password -o jsonpath="{.data.password}" -n awx | base64 --decode ; echo
-ansible-playbook -i ../exercise4.1/ansible_quickstart/inventory.ini job-template.yaml
 
-echo "-------------------------------------------------------------------------"
-echo "Install the rest of the Infra"
-echo "-------------------------------------------------------------------------"
-
-kubectl apply -f ../exercise10/storage.yaml;
-kubectl apply -f ../exercise10/deployment.yaml;
-kubectl apply -f ../exercise10/otel-collector.yaml;
-kubectl apply -f ../exercise8/jaeger.yaml;
-kubectl apply -f ../exercise9/prometheus.yaml;
-kubectl apply -f ../exercise12/grafana-loki.yaml;
-kubectl apply -f ./grafana.yaml;
-echo "-------------------------------------------------------------------------"
-echo "wait"
-echo "-------------------------------------------------------------------------"
-sleep 10;
-kubectl get pods -A
+# Expected output should show pods like:
+# awx              awx-demo-web-xxx                    3/3     Running
+# awx              awx-demo-task-xxx                   4/4     Running  
+# monitoring       grafana-deployment-xxx              1/1     Running
+# monitoring       prometheus-deployment-xxx           1/1     Running
 ```
+
+### Step 3: Extract AWX Credentials
+
+```bash
+# Get AWX admin password (SAVE THIS - you'll need it!)
+kubectl get secret awx-demo-admin-password -o jsonpath="{.data.password}" -n awx | base64 --decode ; echo
+
+# Example output: SmLs6RC0VN9aMKXxPrIpSpD3ujmaBCzp
+```
+
+### Step 4: Access The AWX UI
+
+```bash
+# Get AWX URL (note this IP:port for later)
+minikube service awx-demo-service -n awx --url
+# Example output: http://127.0.0.1:53331
+```
+
+> ⚠️ **Common Issues:**
+> - If pods are stuck in `Pending`, wait 2-3 minutes for resources to allocate
+> - If services don't respond, check pod status: `kubectl describe pod <pod-name> -n <namespace>`
 
 ---
 
-# Tip for Infrastructure as Code (IaC) with Ansible
+## Part 2: Configure AWX Project and Runbook
 
-> [!TIP]
-> A more efficient **Infrastructure as Code (IaC)** approach can be implemented with Ansible to apply the new configuration and start its service in Minikube. An [example](./infra.yaml) of how to structure a YAML playbook to achieve this.
-> 1. **Configure AWX**
-> At [awx-configuration.yaml](./awx-configuration.yaml), you will find an Ansible script that uses the AWX REST API to create the following resources in AWX: organization, inventory, project, job template, application, client, and token. Additionally, the script generates a `./grafana_updated.yaml` file with the configuration for the Grafana contact point. This contact point enables Grafana to send a message whenever an alert is triggered. 
-> 2. **Diagnostic script**
-> At [collect-status-application.yaml](./collect-status-application.yaml), you will find an Ansible script that collects information about the node where it is executed. The purpose of this script is to 
-> 3. **Run the Playbook**
->```bash
-> playbook -i ../exercise4.1/ansible_quickstart/inventory.ini infra.yaml
-> minikube service awx-demo-service -n awx
-> minikube service grafana-service -n monitoring
-> kubectl get secret awx-demo-admin-password -o jsonpath="{.data.password}" -n awx | base64 --decode ; echo
+### Step 5: Create AWX Project
+
+1. **Access AWX Web UI** using the URL from Step 4
+2. **Login** with username `admin` and the password from Step 3
+3. **Navigate to Projects** → Click **"+ Add"**
+4. **Configure Project:**
+   - **Name**: `SRE Project`
+   - **Organization**: `Default`
+   - **Source Control Type**: `Git`
+   - **Source Control URL**:
+     ```
+     https://github.com/cguillencr/sre-abc-training.git
+     ```
+   - **Source Control Branch/Tag/Commit**: leave blank (default = `main`)
+   - Leave the rest of the fields unchanged and click **Save**
+
+> **Note:** This repository is public and read-only. You will **not push any changes** to it. It's used only so AWX can load the playbook `collect-status-application.yaml` during the lab.
+
+#### 🔐 Why Not Use the IBM Internal Repo?
+
+Because:
+
+- Students not on VPN or without access would break the exercise
+- It may require authentication setup in AWX (SSH keys or GitHub App token)
+- The repo content is static during the exercise, so the public fork is sufficient
+
+> **Example:** This is how your AWX project should look after saving:
+>
+> ![AWX SRE Project Configuration](./images/awx-sre-project.png)
+
+### Step 6: Create Runbook (Job Template)
+
+1. **Navigate to Templates** → Click **"+ Add" → Job Template**
+2. **Configure Template:**
+   - **Name**: `Collect System Status`
+   - **Job Type**: `Run`
+   - **Inventory**: `Demo Inventory`
+   - **Project**: `SRE Project` (from Step 5)
+   - **Playbook**: `exercises/exercise13/collect-status-application.yaml`
+   - **Credential**: `Demo Credential`
+   - Click **Save**
+
+> **Example:** Your Job Template setup in AWX should look similar to this:
+>
+> ![AWX Job Template Setup](./images/awx-template-setup.png)
+
+### Step 7: Test Manual Execution
+
+1. **Find your job template** in the Templates list
+2. **Click the rocket icon** (🚀) to launch
+3. **Verify successful execution** (should show green checkmark)
+
+**Expected Result:** Job should complete successfully and show system information in the output logs.
+
+> **Example:** After clicking the rocket icon, your job should appear like this in the Jobs list:
+>
+> ![AWX Jobs List](./images/awx-jobs.png)
+
+> **Note:** If the job shows a green checkmark but no output appears, try refreshing the page. AWX sometimes delays the display of job logs in the UI until you reload.
+
+### Deep Dive: Understanding the Runbook
+
+Let's examine what our runbook actually does:
+
+```yaml
+# Content of collect-status-application.yaml
+---
+- name: Collect System Diagnostics for Incident Response
+  hosts: localhost
+  gather_facts: yes
+  tasks:
+    - name: Get system uptime
+      command: uptime
+      register: system_uptime
+      
+    - name: Check disk usage
+      command: df -h
+      register: disk_usage
+      
+    - name: Get running processes
+      command: ps aux --sort=-%cpu | head -20
+      register: top_processes
+      
+    - name: Check Kubernetes pod status
+      command: kubectl get pods -A
+      register: k8s_pods
+      ignore_errors: yes
+      
+    - name: Display collected information
+      debug:
+        msg: |
+          === INCIDENT RESPONSE DIAGNOSTICS ===
+          System Uptime: {{ system_uptime.stdout }}
+          
+          Top CPU Processes:
+          {{ top_processes.stdout }}
+          
+          Kubernetes Status:
+          {{ k8s_pods.stdout }}
+```
+
+**Why this matters in SRE:**
+
+- **Standardized response**: Every incident gets the same diagnostic information
+- **Time savings**: No manual command execution during incidents
+- **Documentation**: All actions are logged automatically
+- **Consistency**: Eliminates human error in diagnostic collection
+
+---
+
+## Part 3: API Integration Setup (10 minutes)
+
+### Step 8: Create API Application
+
+1. **Navigate to Applications** (under Administration)
+2. **Click "+ Add"**
+3. **Configure Application:**
+   - **Name**: `Grafana Integration`
+   - **Organization**: `Default`
+   - **Authorization Grant Type**: `Resource owner password-based`
+   - **Client Type**: `Confidential`
+   - Click **Save**
+4. **Copy the Client ID and Secret** (you'll need these later)
+
+> ℹ️ **Important:** This is the only time the API token will be shown. Make sure to copy and save it securely — you won't be able to retrieve it later.
+
+### Step 9: Generate a Personal API Token
+
+1. **Go to Users** (under Access) → Click on admin → **Tokens** → **"+ Add"**
+2. **Configure Token:**
+   - **Application**: `Grafana Integration`
+   - **Scope**: `Write`
+   - Click **Save**
+3. **Copy the Token** (you'll need this for Grafana)
+
+> ℹ️ **Important:** This is the only time the **token value** and associated **refresh token** will be shown. Make sure to copy and store them securely. You won't be able to retrieve them again from the UI.
+
+### Step 10: Test API Access
+
+> **Open a new terminal window** for this step. You'll be using `curl` to interact with the AWX API directly.  
+> Keep your current Minikube terminal open if it's running port forwarding or watching pods.
+
+```bash
+# Replace with your actual values
+export AWX_TOKEN="your_token_here"
+export AWX_URL="http://127.0.0.1:<random-port>"
+```
+
+> **Note:** The AWX URL will always start with `http://127.0.0.1:<random-port>`  
+> This value comes from the output of:
+>
+> ```bash
+> minikube service awx-demo-service -n awx --url
 > ```
+>
+> The port number is dynamically assigned and will be different for each student or environment. Be sure to use the full output as-is.
 
----
-
-# Final Objective
-At the end of this document, you should accomplished this:
-> [!IMPORTANT]
-> The goal is to trigger a runbook each time alerts are fired in Grafana. This will collect additional information about the system's status and help reduce the time needed to resolve incidents.
-> Alerts in Grafana should include this new Contact Point:
-> ![grafana-alerts-contact-point](./images/grafana-alerts-contact-point.png)
-> As you know, the degradation conditions implemented in our program will eventually generate an error:
-> ![grafana error triggering.png](./images/grafana-error-triggering.png)
-> After a while, each alert in Grafana will trigger the execution of the runbook:
-> ![awx template job executions](./images/awx-template-job-executions.png)
-
----
-
-## **Cleanup**
-To remove **all** deployed resources:
+#### Test API connectivity
 
 ```bash
-kubectl delete ns awx application opentelemetry monitoring
-kubectl delete pv --all
-kubectl delete pvc --all
+curl -s -H "Authorization: Bearer $AWX_TOKEN" \
+     -H "Content-Type: application/json" \
+     $AWX_URL/api/v2/me/ | jq '.results[] | {id, username, is_superuser}'
+```
+
+You should receive a JSON response with your user info:
+
+```json
+{
+  "id": 1,
+  "username": "admin",
+  "is_superuser": true,
+  ...
+}
+```
+
+### Deep Dive: AWX REST API
+
+Understanding the API calls that power automation.
+
+#### 1. List all job templates
+
+```bash
+curl -s -H "Authorization: Bearer $AWX_TOKEN" \
+     $AWX_URL/api/v2/job_templates/ | jq '.results[] | {id, name}'
+```
+
+This will return something like:
+
+```json
+{
+  "id": 9,
+  "name": "Collect System Status"
+}
+{
+  "id": 7,
+  "name": "Demo Job Template"
+}
+```
+
+> **Note:** Job Template IDs vary. Use the correct `id` from your own environment in the next step.
+
+#### 2. Launch a job (THIS IS WHAT GRAFANA WILL DO)
+
+```bash
+curl -s -X POST \
+     -H "Authorization: Bearer $AWX_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{}' \
+     $AWX_URL/api/v2/job_templates/9/launch/ | jq '{job, status}'
+```
+
+> Replace `9` with the ID of your own `Collect System Status` job template.
+
+The response will look like:
+
+```json
+{
+  "job": 5,
+  "status": "pending"
+}
+```
+
+#### 3. Monitor job status
+
+```bash
+curl -s -H "Authorization: Bearer $AWX_TOKEN" \
+     $AWX_URL/api/v2/jobs/3/ | jq '.status'
+```
+
+> Status will progress through:
+>
+> - "pending"
+> - "running"
+> - "successful"
+
+**Why API automation matters:**
+
+- **Integration**: Any system can trigger runbooks (Grafana, PagerDuty, custom scripts)
+- **Programmatic control**: No human needed to click buttons during incidents
+- **Scalability**: Handle hundreds of concurrent runbook executions
+
+> **Why this step is important:**
+>
+> These API calls demonstrate how Grafana will trigger AWX jobs automatically when an alert fires.
+>
+> By testing the API manually, you're confirming:
+>
+> - The runbook can be launched without any human intervention
+> - AWX is reachable and properly secured via token-based access
+> - Your setup supports real-time automation from monitoring systems like Grafana
+>
+> This is the core of an automated incident response system: when something goes wrong, your monitoring tools don't just send a notification — they can trigger diagnostic or remediation actions automatically through AWX.
+>
+> This manual API test ensures the pieces are working *before* connecting them together with alerting logic.
+
+---
+
+## Part 4: Configure Grafana Alerting (15 minutes)
+
+### Step 11: Access Grafana
+
+> **Open a new terminal window** if your current one is running a port-forward or watching AWX logs.  
+> You'll need this terminal to retrieve the Grafana URL and access the web interface.
+
+```bash
+# Get Grafana URL
+minikube service grafana-service -n monitoring
+```
+
+Use the URL output (typically `http://127.0.0.1:<port>`) to open Grafana in your browser.
+
+**Default login:**
+
+- **Username**: `admin`
+- **Password**: `admin`
+
+### Step 12: Create Contact Point
+
+1. **Navigate to** `Alerting → Contact Points → + Add Contact Point`
+
+2. **Configure the Webhook Contact Point:**
+   - **Name**: `AWX Runbook Trigger`
+   - **Integration**: `Webhook`
+   - **URL**:
+     ```
+     http://127.0.0.1:30100/api/v2/job_templates/9/launch/
+     ```
+   - **HTTP Method**: `POST`
+
+3. **Authorization Header:**
+   - **Scheme**: `Bearer`
+   - **Credentials**: `<YOUR_API_TOKEN>` (e.g., `MZRXFg1SN1xQPzMhzRyV2csm5Phxe`)
+
+4. **Extra Headers:**
+   - Add:
+     - **Key**: `Content-Type`
+     - **Value**: `application/json`
+
+5. **Save** the contact point
+
+**Explanation:**
+
+This sets up a webhook that triggers an AWX job template (ID `9`) whenever an alert fires. It includes:
+
+- A Bearer token for authorization
+- A `Content-Type: application/json` header
+- POST request to AWX job template launch URL
+
+> **Example:** Configuration for the AWX Runbook Trigger contact point using the Webhook integration in Grafana's latest UI.
+>
+> ![AWX Runbook Trigger Contact Point](./images/grafana-contact-point-awx.png)
+
+### Step 13: Create Alert Rule
+
+> **Note:** Grafana's alerting UI can vary slightly between versions. These steps apply to the unified alerting system.
+
+1. In Grafana, go to **Alerting** → **Alert Rules**
+2. Click **"+ New alert rule"**
+
+#### 1. Enter alert rule name
+
+- **Name**: `High Application Latency`
+
+#### 2. Define query and alert condition
+
+- Click the **"Code"** tab inside the query box (or type directly if you're in "Builder")
+- Paste this PromQL query:
+  ```promql
+  sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
+  ```
+
+- Set the **evaluation interval** (click Options) to `1m`
+- Below, in **Alert condition**, set:
+  - **WHEN** Query
+  - **IS ABOVE**
+  - `1`
+
+![High Application Latency Alert Rule](./images/grafana-alert-high-latency.png)
+
+#### 3. Add folder and labels (optional but recommended)
+
+- **Folder**: You must select or create a folder to store your alert rule (e.g., alerts)
+- **Labels**: Two custom labels were added—severity and warning. These labels are essential for alert routing and filtering in contact points or silences
+
+#### 4. Set Evaluation Behavior
+
+- **Evaluation group**: Set to latency-group, indicating alerts are grouped and evaluated together every 1 minute
+- **Pending period**: 1 minute. The alert must breach its condition continuously for this duration before firing
+- **Keep firing**: Set to 0s, so the alert clears as soon as the condition returns to normal
+
+![Grafana Alert Folder and Evaluation Behavior](./images/grafana-alert-folder-evaluation.png)
+
+#### 5. Configure notifications
+
+This step defines who receives alerts when a rule fires.
+
+- **Recipient system**: Alertmanager (Grafana-managed)
+- **Contact point selected**: AWX Runbook Trigger
+  - This is a custom contact point you previously created to trigger an AWX job (runbook) when an alert fires
+- **Link option available**: You can view or create other contact points using the View or create contact points link
+
+Optional sections like muting, grouping, and timing are collapsed but can be configured for advanced control over how alerts behave when triggered repeatedly or simultaneously.
+
+![Grafana Alert Notification Settings](./images/grafana-alert-notification-settings.png)
+
+Click **Save**
+
+![Grafana Alert Result – High Latency](./images/grafana-alert-result-high-latency.png)
+
+### Deep Dive: Understanding the Alert Query
+
+Let's break down what this PromQL query does:
+
+```promql
+# Our alert query explained:
+sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
+
+# Breaking it down:
+# 1. otel_collector_span_metrics_duration_milliseconds_bucket
+#    ↳ OpenTelemetry histogram buckets measuring request duration
+
+# 2. rate(...[5m])
+#    ↳ Calculate per-second rate over 5-minute window
+
+# 3. sum(...) by (span_name)
+#    ↳ Aggregate all buckets, grouped by operation name
+
+# This effectively measures: "requests per second" for each operation
+# When this goes ABOVE 1 req/sec, it indicates high traffic/latency
+```
+
+**Why this metric matters:**
+
+- **Leading indicator**: Rate increase often precedes latency issues
+- **Actionable**: Clear threshold that indicates when intervention is needed
+- **Observable**: Based on actual user request patterns
+
+### Deep Dive: Webhook Integration
+
+Here's what happens when Grafana sends the webhook:
+
+```bash
+# This is the EXACT HTTP call Grafana makes when alert fires:
+curl -X POST \
+  -H "Authorization: Bearer wpSCyIlK1j8Dy8zM7wTmZ7bbkdgQVE" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "receiver": "AWX Runbook Trigger",
+    "status": "firing",
+    "alerts": [
+      {
+        "status": "firing",
+        "labels": {
+          "alertname": "High Application Latency",
+          "span_name": "http_request"
+        },
+        "annotations": {
+          "summary": "Application latency is above threshold"
+        },
+        "startsAt": "2025-07-29T19:45:00Z"
+      }
+    ],
+    "groupLabels": {},
+    "commonLabels": {
+      "alertname": "High Application Latency"
+    },
+    "commonAnnotations": {},
+    "externalURL": "http://192.168.49.2:32000"
+  }' \
+  http://192.168.49.2:30100/api/v2/job_templates/13/launch/
+```
+
+**The automation chain:**
+
+1. **Application** experiences high latency
+2. **OpenTelemetry** captures metrics
+3. **Prometheus** stores time-series data
+4. **Grafana** evaluates alert rule
+5. **Webhook** triggers AWX job automatically
+6. **AWX** executes diagnostic runbook
+7. **Results** logged for incident responders
+
+---
+
+## Part 5: Test End-to-End Automation (10 minutes)
+
+### Step 14: Trigger Alert
+
+The sample application will naturally degrade and trigger alerts. You can also manually trigger:
+
+```bash
+# Method 1: Trigger application degradation
+kubectl exec -n application deployment/sre-abc-training-app -- curl -X POST http://localhost:8080/degrade
+
+# Method 2: Generate sustained load to trigger metrics
+for i in {1..100}; do
+  kubectl exec -n application deployment/sre-abc-training-app -- curl http://localhost:8080/api/data &
+done
+
+# Method 3: Check current metrics in Prometheus
+kubectl port-forward -n monitoring svc/prometheus-service 9090:9090 &
+# Then visit: http://localhost:9090/graph
+# Query: sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
+```
+
+> **Example:** This is the expected result of testing Method 2
+>
+> ![Prometheus Latency Query – Span Names](./images/prometheus-latency-query-span-names.png)
+
+### Deep Dive: Observing the Full Pipeline
+
+Watch the automation in real-time:
+
+```bash
+# Terminal 1: Watch Kubernetes jobs (AWX executions)
+while true; do clear; kubectl get jobs -n awx; sleep 2; done
+
+# Terminal 2: Monitor AWX job logs
+kubectl logs -n awx -l app.kubernetes.io/name=awx -f --all-containers=true
+
+# Terminal 3: Open Prometheus UI and run a query
+kubectl port-forward -n monitoring svc/prometheus-service 9090:9090
+# Visit http://localhost:9090 and run:
+# sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
+
+# Terminal 4: Watch for new AWX job pods
+while true; do clear; kubectl get pods -n awx | grep automation-job; sleep 2; done
+```
+
+**What you should observe:**
+
+1. **Metric spike**: Prometheus query shows increased rate
+2. **Alert firing**: Grafana shows red alert status
+3. **Job creation**: New `automation-job-*` pod appears in AWX namespace
+4. **Execution logs**: AWX shows runbook execution output
+5. **Automatic cleanup**: Job pod completes and gets cleaned up
+
+### Step 15: Verify Automation
+
+1. **Monitor Grafana Alerts** → Should show firing alert
+2. **Check AWX Jobs** → Should show automatic job execution
+3. **Review Job Output** → Should contain system diagnostic information
+
+**Success Criteria:**
+
+- Grafana alert fires when latency increases
+- AWX job executes automatically (no manual intervention)
+- Job collects system diagnostics successfully
+- Process repeats automatically for subsequent alerts
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### AWX not accessible
+
+```bash
+# Get the correct service URL
+minikube service awx-demo-service -n awx --url
+
+# If still not working, check pod status
+kubectl get pods -n awx
+kubectl describe pod -n awx -l app.kubernetes.io/name=awx-demo
+
+# Check logs for errors
+kubectl logs -n awx -l app.kubernetes.io/component=web
+```
+
+#### API calls failing
+
+```bash
+# Test API connectivity step by step
+export AWX_URL="http://192.168.49.2:30100"
+export AWX_TOKEN="your_token_here"
+
+# 1. Test basic connectivity
+curl -v $AWX_URL/api/v2/
+
+# 2. Test authentication
+curl -H "Authorization: Bearer $AWX_TOKEN" $AWX_URL/api/v2/me/
+
+# 3. Find your job template ID
+curl -H "Authorization: Bearer $AWX_TOKEN" \
+     $AWX_URL/api/v2/job_templates/ | jq '.results[] | {id, name}'
+
+# 4. Test job launch
+curl -X POST \
+     -H "Authorization: Bearer $AWX_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{}' \
+     $AWX_URL/api/v2/job_templates/YOUR_ID/launch/
+```
+
+#### Alerts not triggering AWX
+
+```bash
+# Check Grafana can reach AWX
+kubectl exec -n monitoring deployment/grafana-deployment -- \
+  curl -v http://192.168.49.2:30100/api/v2/
+
+# Test webhook manually
+kubectl exec -n monitoring deployment/grafana-deployment -- \
+  curl -X POST \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}' \
+  http://192.168.49.2:30100/api/v2/job_templates/13/launch/
+
+# Check Grafana notification logs
+kubectl logs -n monitoring deployment/grafana-deployment | grep -i webhook
+```
+
+#### Prometheus metrics missing
+
+```bash
+# Check OpenTelemetry collector is running
+kubectl get pods -n opentelemetry
+
+# Test metrics endpoint
+kubectl exec -n opentelemetry deployment/otel-collector -- \
+  curl http://localhost:8889/metrics | grep otel_collector_span
+
+# Verify application is generating traces
+kubectl logs -n application deployment/sre-abc-training-app
 ```
 
 ---
 
+## Final Objective
+
+By completing this exercise, you should have implemented an automated incident response workflow triggered by Grafana alerts.
+
+### Goal
+
+Each time an alert is fired in Grafana, a diagnostic runbook should be executed automatically via AWX. This setup enhances incident response by:
+
+- Collecting real-time system diagnostics
+- Reducing manual intervention and response time
+- Ensuring consistent and repeatable incident handling
+
+### Alert Integration Example
+
+Once configured, your Grafana alerts should include a contact point like this:
+
+![grafana-alerts-contact-point](./images/grafana-alerts-contact-point.png)
+
+As the application degrades due to simulated conditions, alerts will be triggered:
+
+![grafana-error-triggering](./images/grafana-error-triggering.png)
+
+Each alert should automatically execute your runbook in AWX:
+
+![awx-template-job-executions](./images/awx-template-job-executions.png)
+
+---
+
+## Next Steps
+
+In [Exercise 14](../exercise14), we will conduct an **Operational Readiness Review (ORR)** to ensure your system meets production-level expectations.
+
+You should now be confident with:
+
+- Deploying AWX and configuring job templates through the UI and API
+- Integrating alerting systems (Grafana) with automation tools (AWX)
+- Writing diagnostic Ansible runbooks for incident response
+- Testing and validating alert-triggered automation in a Kubernetes environment
+
+---
