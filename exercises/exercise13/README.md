@@ -37,7 +37,7 @@ cd sre-academy-training/exercises/exercise13
 
 ---
 
-## Part 1: Deploy Infrastructure (10 minutes)
+## Part 1: Deploy Infrastructure
 
 ### Step 1: Automated Deployment
 
@@ -204,7 +204,7 @@ Let's examine what our runbook actually does:
 
 ---
 
-## Part 3: API Integration Setup (10 minutes)
+## Part 3: API Integration Setup
 
 ### Step 8: Create API Application
 
@@ -352,7 +352,7 @@ curl -s -H "Authorization: Bearer $AWX_TOKEN" \
 
 ---
 
-## Part 4: Configure Grafana Alerting (15 minutes)
+## Part 4: Configure Grafana Alerting
 
 ### Step 11: Access Grafana
 
@@ -539,7 +539,7 @@ curl -X POST \
 
 ---
 
-## Part 5: Test End-to-End Automation (10 minutes)
+## Part 5: Test End-to-End Automation
 
 ### Step 14: Trigger Alert
 
@@ -698,10 +698,6 @@ Each time an alert is fired in Grafana, a diagnostic runbook should be executed 
 - Ensuring consistent and repeatable incident handling
 
 ### Alert Integration Example
-
-Once configured, your Grafana alerts should include a contact point like this:
-
-![grafana-alerts-contact-point](./images/grafana-alerts-contact-point.png)
 
 As the application degrades due to simulated conditions, alerts will be triggered:
 
