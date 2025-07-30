@@ -539,71 +539,109 @@ curl -X POST \
 
 ---
 
-## Part 5: Test End-to-End Automation
-
-### Step 14: Trigger Alert
-
-The sample application will naturally degrade and trigger alerts. You can also manually trigger:
-
-```bash
-# Method 1: Trigger application degradation
-kubectl exec -n application deployment/sre-abc-training-app -- curl -X POST http://localhost:8080/degrade
-
-# Method 2: Generate sustained load to trigger metrics
-for i in {1..100}; do
-  kubectl exec -n application deployment/sre-abc-training-app -- curl http://localhost:8080/api/data &
-done
-
-# Method 3: Check current metrics in Prometheus
-kubectl port-forward -n monitoring svc/prometheus-service 9090:9090 &
-# Then visit: http://localhost:9090/graph
-# Query: sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
-```
-
-> **Example:** This is the expected result of testing Method 2
->
-> ![Prometheus Latency Query – Span Names](./images/prometheus-latency-query-span-names.png)
-
 ### Deep Dive: Observing the Full Pipeline
 
-Watch the automation in real-time:
+This section helps you **watch the full alerting and automation pipeline** in real time — from metrics spikes to alert triggers and AWX runbook execution.
+
+#### What You'll Observe:
+
+When the app degrades or traffic spikes:
+
+1. **Latency increases** → Prometheus metrics reflect it
+2. **Grafana alert fires** → Visual red status on alert panel
+3. **Alert triggers webhook** → AWX job is created automatically
+4. **AWX job runs a playbook** → You’ll see a short-lived pod
+5. **Pod completes** → Job logs contain diagnostics; pod gets cleaned up
+
+---
+
+### Suggested Terminal Setup
+
+Run these in **four parallel terminals** for best visibility:
+
+#### **Terminal 1: Watch AWX Job Creation**
 
 ```bash
-# Terminal 1: Watch Kubernetes jobs (AWX executions)
+# Continuously watch for AWX job creations
 while true; do clear; kubectl get jobs -n awx; sleep 2; done
+```
 
-# Terminal 2: Monitor AWX job logs
-kubectl logs -n awx -l app.kubernetes.io/name=awx -f --all-containers=true
+> Look for new `automation-job-*` jobs being created when alerts fire.
 
-# Terminal 3: Open Prometheus UI and run a query
+---
+
+#### **Terminal 2: View AWX Job Logs**
+
+```bash
+# Wait for the job pod to appear (check Terminal 1 output)
+kubectl get pods -n awx | grep automation-job
+
+# Once the pod appears, stream its logs:
+kubectl logs -n awx <pod-name> -f
+```
+
+> These pods are short-lived. If the job finishes fast, the pod might be gone — check Terminal 1 again and be quick!
+
+---
+
+#### **Terminal 3: View Prometheus Metrics**
+
+```bash
 kubectl port-forward -n monitoring svc/prometheus-service 9090:9090
-# Visit http://localhost:9090 and run:
-# sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
+```
 
-# Terminal 4: Watch for new AWX job pods
+Then open your browser:
+[http://localhost:9090](http://localhost:9090)
+Run the following query:
+
+```promql
+sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
+```
+
+> You should see a spike in latency when degradation is triggered.
+
+> ![Prometheus Latency Query – Span Names](./images/prometheus-latency-query-span-names.png)
+
+---
+
+#### **Terminal 4: Watch for Job Pods**
+
+```bash
+# Watch for the automation-job pod itself
 while true; do clear; kubectl get pods -n awx | grep automation-job; sleep 2; done
 ```
 
-**What you should observe:**
+> The pod will be `Running`, then switch to `Completed`, and finally disappear.
 
-1. **Metric spike**: Prometheus query shows increased rate
-2. **Alert firing**: Grafana shows red alert status
-3. **Job creation**: New `automation-job-*` pod appears in AWX namespace
-4. **Execution logs**: AWX shows runbook execution output
-5. **Automatic cleanup**: Job pod completes and gets cleaned up
+---
 
-### Step 15: Verify Automation
+### Testing It End-to-End
 
-1. **Monitor Grafana Alerts** → Should show firing alert
-2. **Check AWX Jobs** → Should show automatic job execution
-3. **Review Job Output** → Should contain system diagnostic information
+Trigger the alert using:
 
-**Success Criteria:**
+```bash
+kubectl exec -n application deployment/sre-abc-training-app -- curl -X POST http://localhost:8080/degrade
+```
 
-- Grafana alert fires when latency increases
-- AWX job executes automatically (no manual intervention)
-- Job collects system diagnostics successfully
-- Process repeats automatically for subsequent alerts
+Or simulate load with:
+
+```bash
+for i in {1..100}; do
+  kubectl exec -n application deployment/sre-abc-training-app -- curl http://localhost:8080/api/data &
+done
+```
+
+---
+
+### Success Criteria
+
+| Event                 | What to Look For                                |
+| --------------------- | ----------------------------------------------- |
+| **Metric spike**      | Latency increase in Prometheus                  |
+| **Alert fired**       | Alert panel turns red in Grafana                |
+| **AWX job triggered** | New `automation-job-*` appears in AWX namespace |
+| **Logs available**    | `kubectl logs` shows Ansible playbook execution |
+| **Pod cleanup**       | Pod auto-deletes after successful run           |
 
 ---
 
