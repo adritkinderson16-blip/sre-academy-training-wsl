@@ -1,82 +1,103 @@
-# **Installation and Configuration Using Helm Charts**
+# Installation and Configuration Using Helm Charts
 
-## **Table of Contents**
+## Table of Contents
+
 1. [Introduction to Helm](#introduction-to-helm)  
 2. [Installing Helm](#installing-helm)  
 3. [Creating the First Helm Chart](#creating-the-first-helm-chart)  
 4. [Installing and Running the Helm Chart](#installing-and-running-the-helm-chart)  
 5. [Expose Services](#expose-services)  
-6. [Publishing a Helm Chart to a Public Repository](#publishing-a-helm-chart-to-a-public-repository)  
+6. [Publishing a Helm Chart to a Public Repository (Optional)](#publishing-a-helm-chart-to-a-public-repository-optional)  
 7. [Final Objective](#final-objective)  
-8. [Cleanup](#cleanup) 
+8. [Useful Helm & Kubernetes Commands](#useful-helm--kubernetes-commands)  
+9. [Cleanup](#cleanup)  
+10. [Next Steps](#next-steps)
 
 ---
 
-## **Introduction to Helm**
-In previous exercises, we deployed our application components using Kubernetes manifests stored in YAML files. These manifests were applied in a strict order using a script (`cluster.sh`). However, this approach has some drawbacks:
+## Introduction to Helm
 
-- **Rigid installation order** – Components must be installed in a specific sequence, with no built-in rollback mechanism if something fails.
-- **Code duplication** – The same values (e.g., resource limits, image names, environment variables) are repeated across multiple manifests.
-- **Difficult updates** – Keeping track of changes across multiple YAML files is cumbersome.
+In previous exercises, we deployed Kubernetes resources manually using YAML files. While this worked, the approach has limitations:
 
-### **What is Helm?**
-**Helm** is a package manager for Kubernetes that allows you to define, install, and upgrade complex Kubernetes applications. It provides a way to package Kubernetes resources into **Helm Charts**, which are reusable, versioned, and easily deployable across environments.
+- **Strict order of execution**: You had to apply each manifest in sequence.
+- **Redundant configuration**: Many values like image names or labels were repeated.
+- **No rollback**: If something went wrong, reverting changes was not trivial.
+- **Poor modularity**: Updating or managing individual parts of the stack was error-prone.
 
-### **Why Use Helm?**
-Using **Helm charts** for Kubernetes deployments provides several benefits:
+To solve these problems, we now introduce **Helm**, a powerful tool for managing Kubernetes applications through **charts**.
 
-**Simplifies deployment** – A Helm chart encapsulates all necessary Kubernetes resources, eliminating the need to apply them individually.  
-**Version control** – Helm keeps track of chart versions, making rollbacks and upgrades easier.  
-**Reusable configurations** – Instead of duplicating values across multiple manifests, Helm allows you to define configurations in a centralized file (`values.yaml`).  
-**Improved maintainability** – With Helm, you can manage deployments in a structured and modular way.  
+![Infrastructure Overview](Infra.png)
 
-In this exercise, we will transition from manually applying Kubernetes manifests to using **Helm charts** to deploy and manage our application.
+> This diagram represents the updated architecture of our SRE Academy lab environment. With the introduction of **Helm**, we now manage application and observability stack deployments as modular, reusable charts. Helm simplifies the orchestration of components like:
+
+### What is Helm?
+
+Helm is the **package manager for Kubernetes**. It simplifies deployment by bundling all Kubernetes manifests and configurations into reusable packages called **Helm charts**.
+
+Each Helm chart contains:
+
+- A `Chart.yaml` file that defines metadata (name, version, description)
+- A `values.yaml` file that holds configurable values
+- A `templates/` directory with the actual Kubernetes manifests
+
+Helm lets you:
+
+- Install, upgrade, or rollback applications with a single command
+- Use variables and templates to avoid duplication
+- Version-control your infrastructure as code
 
 ---
 
-## **Installing Helm**
-Before creating our first Helm chart, we need to install Helm.
+## Installing Helm
 
+Before using Helm, install it via your package manager.
+
+### macOS (Homebrew):
 ```bash
 brew install helm
-```
+````
 
-Once installed, verify the version:
+### Verify Installation:
 
 ```bash
 helm version
 ```
 
+This should return the installed version of Helm. If you see an error, double-check your PATH settings.
+
 ---
 
-## **Creating the First Helm Chart**
-Before proceeding, **navigate to the correct directory**:
+## Creating the First Helm Chart
+
+### Navigate to the Exercise Directory
+
+All work for this exercise will be done in the correct subdirectory:
 
 ```bash
 cd sre-abc-training/exercises/exercise14
 ```
 
-Now, create the **Helm Chart**:
+### Create a New Helm Chart
 
 ```bash
 helm create my-sre-app-chart
 ```
 
-This creates a new directory **`my-sre-app-chart`** with a default Helm structure. However, we need to remove the default templates:
+This creates a folder named `my-sre-app-chart` with a standard Helm structure.
+
+### Clean Up the Default Templates
+
+Helm generates default manifests like a sample service and deployment. Since we're replacing those with our own custom manifests, remove them:
 
 ```bash
 rm -rf my-sre-app-chart/templates/*
 ```
 
-> **[!NOTE]**  
-> When executing the above command, **you may receive a confirmation prompt** like this:  
-> ```
-> zsh: sure you want to delete all the files in /Users/<your-user>/sre-abc-training/exercises/exercise14/my-sre-app-chart/templates [yn]?
-> ```
-> Just type Y. This is expected since Helm generates default templates that we don’t need.
+> Note: Your shell may prompt you with a warning (e.g., `zsh: sure you want to delete...`). This is normal. Type `y` to proceed.
 
-### **Copying Necessary Manifests**
-Next, copy the required manifests from previous exercises into our new **Helm Chart**:
+### Add Required Manifests to the Chart
+
+We will now reuse and organize the manifests you've written in earlier exercises.
 
 ```bash
 cp ../exercise10/storage.yaml ../exercise10/deployment.yaml ../exercise10/otel-collector.yaml \
@@ -84,140 +105,228 @@ cp ../exercise10/storage.yaml ../exercise10/deployment.yaml ../exercise10/otel-c
    ../exercise12/grafana.yaml my-sre-app-chart/templates/
 ```
 
+Each file serves a distinct role:
+
+* `deployment.yaml`: Deploys your main app
+* `storage.yaml`: Sets up persistent volumes
+* `otel-collector.yaml`: Collects traces and metrics
+* `jaeger.yaml`: Adds distributed tracing
+* `prometheus.yaml`: Collects and stores metrics
+* `grafana.yaml`: Visualizes metrics
+* `grafana-loki.yaml`: Enables log aggregation
+
+By adding them into the chart’s `templates/` folder, Helm now manages their lifecycle.
+
 ---
 
-## **Installing and Running the Helm Chart**
-Once everything is set up, install the chart with:
+## Installing and Running the Helm Chart
+
+With your chart prepared, you're ready to install it into your Kubernetes cluster.
+
+### Step 1: Install the Helm Chart
 
 ```bash
-helm install sre-app ./my-sre-app-chart
+helm install sre-app ./my-sre-app-chart --wait --timeout=5m
 ```
 
-To verify the installation:
+* `sre-app`: This is the release name. You can pick any name you want.
+* `--wait`: Helm will wait until all Kubernetes resources are healthy.
+* `--timeout`: Defines how long Helm should wait before failing.
+
+### Step 2: Verify the Installation
+
+Check what manifests Helm deployed:
 
 ```bash
 helm get manifest sre-app
+```
+
+See if your pods are running:
+
+```bash
 kubectl get pods -A
 ```
 
-> **[!IMPORTANT]**
-> After installing the Helm Chart, it may take several minutes for all services to start.  
->  
-> Run the following command to monitor their status:
-> ```bash
-> kubectl get pods -A -o wide
-> ```
-> Wait for all pods to reach Running status before continuing.
+If any pods are `Pending`, it may be due to resource limits. Wait a few minutes and check again.
 
 ---
 
-## **Expose Services**
+## Expose Services
 
-### **Access the Application Service**
-Run:
+Your application and observability tools expose web interfaces. Use `minikube service` to access them.
+
+### Access the Application
+
 ```bash
 minikube service sre-abc-training-service -n application
 ```
-- This will open the **application page** in your default web browser.
-- **Keep the terminal open**—closing it will stop the service.
 
-### **Access Grafana (New Terminal)**
-1. **Open a new terminal session**.
-2. Run:
-   ```bash
-   minikube service grafana-service -n monitoring
-   ```
-3. This will open **Grafana’s UI** in a browser.
+This command opens the application in a browser. Keep this terminal window open; closing it will stop the forwarding.
+
+### Access Grafana
+
+In a new terminal:
+
+```bash
+minikube service grafana-service -n monitoring
+```
+
+Log in to Grafana using the default credentials (`admin/admin` unless changed).
+
+> Tip: If these commands don’t work, make sure `minikube tunnel` is running in a separate terminal.
 
 ---
 
-## **Publishing a Helm Chart to a Public Repository**
-This section covers **publishing the Helm chart** to a public repository.
+## Publishing a Helm Chart to a Public Repository (Optional)
 
-### **1. Package the Helm Chart**
+### Background
+
+You **cannot publish charts to the restricted IBM training repository**. However, you are encouraged to practice publishing by using a **public repository on your personal GitHub account**.
+
+### Step-by-Step Guide
+
+#### 1. Package the Chart
+
 ```bash
 helm package ./my-sre-app-chart
 ```
 
-This will create a `.tgz` file in the current directory.
+This creates a file like `my-sre-app-chart-0.1.0.tgz`.
 
-### **2. Create an `index.yaml` File**
+#### 2. Create a Helm Repo Index
+
 ```bash
-helm repo index . --url https://cguillencr.github.io/sre-abc-training/
+helm repo index . --url https://YOUR_USERNAME.github.io/YOUR_REPO_NAME/
 ```
 
-This generates an **index file** required for Helm repositories.
+#### 3. Move Files to a `docs/` Directory
 
-### **3. Enable GitHub Pages**
-- Navigate to your repository **on GitHub**.
-- Go to **Settings > Pages**.
-- Set the source to **main branch** and **docs directory**.
-- Save the changes.
-
-### **4. Push the Helm Chart Files to GitHub**
 ```bash
 mkdir -p ./docs/
-mv my-sre-app-chart-0.1.0.tgz ./docs/my-sre-app-chart-0.1.0.tgz
+mv my-sre-app-chart-0.1.0.tgz ./docs/
 cd ./docs
-helm repo index ./ --url https://cguillencr.github.io/sre-abc-training
+helm repo index . --url https://YOUR_USERNAME.github.io/YOUR_REPO_NAME/
+```
 
+#### 4. Push to GitHub
+
+```bash
 git add ./docs/index.yaml
 git add ./docs/my-sre-app-chart-0.1.0.tgz
-cd ..
-git commit -m "Move Helm repo files under exercise14/docs"
+git commit -m "Add Helm chart to GitHub Pages"
 git push origin main
 ```
 
-### **5. Add the Repository Locally**
+#### 5. Enable GitHub Pages
+
+* On GitHub, go to your repo settings
+* Under **Pages**, set source to `main` branch and `/docs` folder
+
+#### 6. Add and Use the Repo Locally
+
 ```bash
-helm repo add sre-abc-lab https://cguillencr.github.io/sre-abc-training/
+helm repo add my-sre-lab https://YOUR_USERNAME.github.io/YOUR_REPO_NAME/
 helm repo update
-helm repo list
-helm search repo sre-abc-lab
+helm search repo my-sre-lab
 ```
 
-### **6. Install the Application from the Repository**
-```bash
-helm install sre-app sre-abc-lab/my-sre-app-chart
-```
+#### 7. Install the Chart from GitHub
 
----
-
-## **Final Objective**
-At the end of this exercise, you should accomplish the following:
-
-> All cluster components should be installed using **Helm Charts**, replacing direct > Kubernetes manifests.  
-> You should be able to **rollback** deployments in case of failure.  
-> The **Helm Chart** should be **published to a repository** and **retrievable** via > Helm.  
-> 
-> To verify, run:
-> 
-> ```bash
-> kubectl get pods -A
-> ```
-> 
-> You should see output similar to:
-> 
-> ```
-> application     sre-abc-training-app-fc68fcc89-dz9rk     1/1     Running
-> monitoring      grafana-deployment-69c545d6-2ljnh        1/1     Running
-> monitoring      prometheus-deployment-7b4f4dddbf-mdfbr   1/1     Running
-> opentelemetry   jaeger-856888c4b4-zznjv                  1/1     Running
-> opentelemetry   loki-86657bb9c-9f9zh                     1/1     Running
-> opentelemetry   otel-collector-7fdd968cb5-jgnzn          1/1     Running
-> ```
-
----
-
-## **Cleanup**
-To delete the Helm deployment and clean up resources, run:
 ```bash
 helm uninstall sre-app
+helm install sre-app my-sre-lab/my-sre-app-chart
 ```
 
-To verify that all resources are deleted:
+#### Optional Cleanup
+
+Once you've published to your personal GitHub, you can remove the `docs/` folder locally to avoid confusion:
+
+```bash
+rm -rf ./docs
+```
+
+---
+
+## Final Objective
+
+You should now:
+
+* Be able to deploy your application and observability stack using Helm
+* Understand how Helm organizes Kubernetes resources into charts
+* Optionally, publish a Helm chart and use it from a remote repo
+
+Check your cluster status:
+
 ```bash
 kubectl get pods -A
 ```
+
+Expected output:
+
+```
+NAMESPACE       NAME                                      READY   STATUS    RESTARTS   AGE
+application     sre-abc-training-app-xxxxxx              1/1     Running   0          5m
+monitoring      grafana-deployment-xxxxxx                1/1     Running   0          5m
+monitoring      prometheus-deployment-xxxxxx             1/1     Running   0          5m
+opentelemetry   jaeger-xxxxxx                            1/1     Running   0          5m
+opentelemetry   loki-xxxxxx                              1/1     Running   0          5m
+opentelemetry   otel-collector-xxxxxx                    1/1     Running   0          5m
+```
+
+---
+
+## Useful Helm & Kubernetes Commands
+
+```bash
+# Helm
+helm list -A
+helm status sre-app
+helm get all sre-app
+helm history sre-app
+helm rollback sre-app <revision>
+
+# Kubernetes
+kubectl get pods -A
+kubectl top pods -A
+kubectl describe pod <pod-name> -n <namespace>
+kubectl logs <pod-name> -n <namespace>
+```
+
+---
+
+## Cleanup
+
+To fully reset your environment:
+
+```bash
+# Uninstall the Helm release
+helm uninstall sre-app
+
+# Remove other Helm-managed tools (if present)
+helm uninstall my-awx-operator -n awx || true
+
+# Delete namespaces
+kubectl delete ns application --ignore-not-found
+kubectl delete ns monitoring --ignore-not-found
+kubectl delete ns opentelemetry --ignore-not-found
+kubectl delete ns awx --ignore-not-found
+
+# Delete persistent volumes
+kubectl delete pvc --all --all-namespaces --ignore-not-found
+kubectl delete pv --all --ignore-not-found
+```
+
+---
+
+## Next Steps
+
+In the [Exercise15](../exercise15), you will shift focus from application-level automation to **infrastructure-level automation using Terraform**.
+
+You should now be confident with:
+
+* Structuring Helm charts
+* Installing and managing releases
+* Publishing charts for reuse
+* Using templated Kubernetes deployments
 
 ---
