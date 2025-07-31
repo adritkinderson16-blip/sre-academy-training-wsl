@@ -1,177 +1,358 @@
 # **Infrastructure Automation with Terraform**
 
 ## **Table of Contents**
+
 - [Introduction](#introduction)
 - [Why Use Terraform in SRE?](#why-use-terraform-in-sre)
-- [Terraform Workflow](#terraform-workflow)
-- [Files Provided](#files-provided)
-- [Navigate to the Directory](#navigate-to-the-directory)
+- [Lab Objectives](#lab-objectives)
 - [Prerequisites](#prerequisites)
-- [Step-by-Step Instructions](#step-by-step-instructions)
-- [Expected Outcome](#expected-outcome)
-- [Verify Deployment](#verify-deployment)
+- [Navigate to the Directory](#navigate-to-the-directory)
+- [Module 1: The Basics - Deploying a Simple Application](#module-1-the-basics---deploying-a-simple-application)
+- [Module 2: Expanding Your Infrastructure - A Multi-Tier Application](#module-2-expanding-your-infrastructure---a-multi-tier-application)
+- [Module 3: Advanced Concepts and Troubleshooting](#module-3-advanced-concepts-and-troubleshooting)
 - [Cleanup](#cleanup)
-- [Important Notes](#important-notes)
 - [Final Objective](#final-objective)
+- [Next Steps](#next-steps)
 
 ---
 
 ## **Introduction**
 
-In previous exercises, we used Helm Charts, YAML manifests, and Ansible to manage Kubernetes resources. In this practice, we will explore another **Infrastructure as Code (IaC)** tool widely used in the SRE world — **Terraform**.
+In previous exercises, we used Helm Charts, YAML manifests, and Ansible to manage Kubernetes resources. In this expanded practice, we will explore **Terraform**, a powerful and flexible **Infrastructure as Code (IaC)** tool that allows engineers to describe, provision, and manage infrastructure declaratively.
 
-Terraform allows us to declaratively provision cloud and Kubernetes infrastructure in a consistent and reproducible way using code.
+This lab takes you from basic to advanced Terraform usage within the context of Kubernetes. You’ll learn not only how to use Terraform, but why it’s a valuable tool in the SRE toolkit.
 
 ---
 
 ## **Why Use Terraform in SRE?**
 
-Terraform brings several benefits for Site Reliability Engineers:
-- **Declarative Configuration**: Define the desired state of infrastructure and let Terraform handle the rest.
-- **Version Control**: Infrastructure code can be committed, reviewed, and audited like application code.
-- **State Management**: Maintains a state file to track deployed infrastructure.
-- **Platform Agnostic**: Supports multiple providers (AWS, GCP, Azure, Kubernetes, etc.).
-- **Repeatability**: Avoids manual drift by always applying the latest infrastructure state.
+Terraform is widely used by Site Reliability Engineers (SREs) because it enables automation, repeatability, and visibility into infrastructure changes. Its key benefits include:
+
+- **Declarative Configuration**: You define what you want (the *desired state*), and Terraform figures out how to reach that state.
+- **Version Control**: Infrastructure becomes code. You can review, track, and roll back changes.
+- **State Management**: Terraform keeps track of what it deployed, helping to detect drift and avoid redeploying unchanged resources.
+- **Multi-Cloud and Platform Agnostic**: Use the same tool to manage AWS, Azure, GCP, Kubernetes, and more.
+- **Automation-Friendly**: Integrates well with CI/CD pipelines, GitOps workflows, and monitoring systems.
 
 ---
 
-## **Terraform Workflow**
+## **Lab Objectives**
 
-Here’s how a typical Terraform workflow looks for deploying resources in Kubernetes:
+By the end of this lab, you will:
 
-1. **Write Code**: Define resources in `.tf` files (main.tf, variables.tf, etc.).
-2. **Initialize**: Run `terraform init` to prepare Terraform for use.
-3. **Preview Changes**: Run `terraform plan` to review what will be created.
-4. **Apply**: Run `terraform apply` to deploy the infrastructure.
-5. **Track State**: Terraform keeps a `.tfstate` file to manage resource changes over time.
-
-> 🧪 We include a `terraform.tfstate.example` file in this repo for **educational purposes only**. This file is NOT used during the live deployment but illustrates what Terraform’s state tracking file looks like.
-
----
-
-## **Files Provided**
-
-- **main.tf** – Defines Kubernetes Namespace, Deployment, and Service.
-- **variables.tf** – Contains configurable values like namespace, image, ports, etc.
-- **outputs.tf** – Displays output after a successful deployment.
-- **terraform.tfstate.example** – Shows what a Terraform state file looks like (not functional).
-
----
-
-## **Navigate to the Directory**
-
-Before proceeding, navigate to the correct directory:
-
-```bash
-cd sre-abc-training/exercises/exercise15
-```
+- Understand Terraform’s core components: providers, resources, variables, outputs, and state.
+- Use Terraform to deploy and manage Kubernetes applications.
+- Work with real-world patterns like ConfigMaps, environment variables, and multi-tier apps.
+- Implement workspace isolation for environments (e.g., dev vs. prod).
+- Learn troubleshooting techniques for failed deployments and state management.
 
 ---
 
 ## **Prerequisites**
 
-Make sure the following tools are installed and configured:
-- **Terraform CLI v1.3+**
-- **Kubernetes cluster (via Minikube or Docker Desktop)**
-- **kubectl is configured and connected to your running cluster**
-- **Terraform Kubernetes provider plugins installed (`terraform init` does this automatically)**
+You need the following tools installed and configured:
+
+- Terraform CLI
+- A Kubernetes cluster (Minikube)
 
 ---
 
-## **Step-by-Step Instructions**
+## **Navigate to the Directory**
 
-1. **Initialize the Terraform working directory**:
+This exercise is located in the following path:
 
-    ```bash
-    terraform init
-    ```
+```bash
+cd sre-academy-training/exercises/exercise15
+````
 
-2. **Preview the changes Terraform will make**:
-
-    ```bash
-    terraform plan
-    ```
-
-3. **Apply the configuration to deploy your app**:
-
-    ```bash
-    terraform apply
-    ```
-
-    You will be prompted to confirm:
-
-    ```plaintext
-    Do you want to perform these actions?
-    Terraform will perform the actions described above.
-    Only 'yes' will be accepted to approve.
-
-    Enter a value: yes
-    ```
+Make sure you’re in this directory before executing any Terraform commands.
 
 ---
 
-## **Expected Outcome**
+## **Module 1: The Basics – Deploying a Simple Application**
 
-After applying the configuration:
-- A new namespace named `application` is created
-- A deployment named `sre-abc-training-app` with 3 replicas is created
-- A service named `sre-abc-training-app-service` is created as a NodePort
-- Output will confirm the names of the created resources
+We will start by deploying a basic “Hello, World!” Python web application into a Kubernetes cluster using Terraform.
 
 ---
 
-## **Verify Deployment**
+### **Step 1: Understand the Terraform Configuration**
 
-1. **Check deployed resources**:
+This exercise includes several `.tf` files:
 
-    ```bash
-    kubectl get all -n application
-    ```
+* `main.tf`: Defines the Kubernetes resources (namespace, deployment, service)
+* `variables.tf`: Contains parameterized values like app name, image, port, and replicas
+* `outputs.tf`: Defines what to show after deployment (namespace, deployment name, etc.)
 
-2. **Access the application using Minikube**:
+Open these files in your editor and review their structure and content.
 
-    ```bash
-    minikube service sre-abc-training-app-service -n application
-    ```
+---
 
-    This should open your default browser and display the “Hello, World!” message from the Python app.
+### **Step 2: Configure the Terraform Provider**
+
+Terraform uses **providers** to interact with infrastructure platforms. For this exercise, we’ll use the `kubernetes` provider.
+
+Create a new file named `provider.tf` with the following:
+
+```hcl
+terraform {
+  required_providers {
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = ">= 2.0"
+    }
+  }
+}
+
+provider "kubernetes" {
+  config_path = "~/.kube/config"
+}
+```
+
+* `required_providers`: Specifies the plugins Terraform needs.
+* `config_path`: Tells Terraform how to authenticate with your Kubernetes cluster (usually via `kubectl` config).
+
+---
+
+### **Step 3: Initialize Terraform**
+
+```bash
+terraform init
+```
+
+This command:
+
+* Downloads the required provider plugins (e.g., Kubernetes).
+* Sets up the local working directory.
+* Prepares the backend for storing Terraform’s state.
+
+You must run this the **first time** or any time you add new provider blocks.
+
+---
+
+### **Step 4: Review the Execution Plan**
+
+```bash
+terraform plan
+```
+
+This command performs a dry run:
+
+* It checks what Terraform *would* create based on your `.tf` files.
+* No actual resources are created at this stage.
+* It shows the exact set of changes to be applied.
+
+Review the output to understand what Terraform is about to do.
+
+---
+
+### **Step 5: Apply the Configuration**
+
+```bash
+terraform apply
+```
+
+When prompted:
+
+```text
+Do you want to perform these actions?
+  Terraform will perform the actions described above.
+  Only 'yes' will be accepted to approve.
+
+  Enter a value: yes
+```
+
+Terraform will:
+
+* Create a new Kubernetes namespace
+* Deploy the Python app (with 3 replicas)
+* Create a NodePort service to expose it
+
+---
+
+### **Step 6: Verify the Deployment**
+
+Check that everything is running in the Kubernetes cluster:
+
+```bash
+kubectl get all -n application
+```
+
+You should see:
+
+* A deployment
+* 3 running pods
+* A service
+
+To access the app locally in your browser:
+
+```bash
+minikube service sre-abc-training-app-service -n application
+```
+
+Terraform has successfully deployed your application using code.
+
+---
+
+### **Step 7: Modify and Reapply**
+
+Let’s update the number of replicas:
+
+1. Edit `variables.tf`:
+
+```hcl
+variable "replicas" {
+  default = 5
+}
+```
+
+2. Preview the change:
+
+```bash
+terraform plan
+```
+
+3. Apply the change:
+
+```bash
+terraform apply
+```
+
+Terraform will only update the replica count in the deployment — no other resources will be changed.
+
+---
+
+## **Module 2: Expanding Your Infrastructure – A Multi-Tier Application**
+
+### **Hands-on Challenge 1: Add a ConfigMap**
+
+A ConfigMap lets you inject configuration into your app without changing code.
+
+1. Create `config.tf`:
+
+```hcl
+resource "kubernetes_config_map" "app_config" {
+  metadata {
+    name      = "app-config"
+    namespace = kubernetes_namespace.app_namespace.metadata[0].name
+  }
+  data = {
+    "MESSAGE_TEXT" = "Hello from the SRE Academy!"
+  }
+}
+```
+
+2. Modify the container spec in `main.tf` to use the ConfigMap:
+
+```hcl
+env {
+  name  = "MESSAGE_TEXT"
+  value = kubernetes_config_map.app_config.data.MESSAGE_TEXT
+}
+```
+
+3. Apply the changes:
+
+```bash
+terraform apply
+```
+
+Your app will now use the environment variable defined in the ConfigMap.
+
+---
+
+### **Hands-on Challenge 2: Add a Redis Database**
+
+Redis will act as a second-tier backend for our application.
+
+Tasks:
+
+* Deploy a Redis pod using the `redis:alpine` image.
+* Create a `ClusterIP` service for Redis.
+* Expose its host and port to the Python app as environment variables.
+
+Hints:
+
+* Redis listens on port `6379`.
+* Use a second deployment and service in a new file: `redis.tf`.
+* Reference `kubernetes_service.redis.metadata[0].name` for the hostname.
+
+This simulates a **multi-tier app**, common in microservices architectures.
+
+---
+
+## **Module 3: Advanced Concepts and Troubleshooting**
+
+### **Hands-on Challenge 3: Using Workspaces for Environments**
+
+Workspaces allow you to maintain separate state for different environments.
+
+1. Destroy resources in default workspace:
+
+```bash
+terraform workspace select default
+terraform destroy
+```
+
+2. Create a new workspace:
+
+```bash
+terraform workspace new dev
+```
+
+3. Reapply the configuration:
+
+```bash
+terraform apply
+```
+
+4. Modify the app (e.g., change `replicas`) and reapply.
+
+5. Switch between workspaces to compare state:
+
+```bash
+terraform workspace select default
+terraform plan
+```
+
+Each workspace is isolated — no shared state.
 
 ---
 
 ## **Cleanup**
 
-To destroy all resources created by Terraform:
+To delete resources:
 
 ```bash
 terraform destroy
 ```
 
-Confirm when prompted:
+To clean up workspaces:
 
-```plaintext
-Do you really want to destroy all resources?
-Terraform will destroy all your managed infrastructure, as shown above.
-Only 'yes' will be accepted to confirm.
-
-Enter a value: yes
+```bash
+terraform workspace select default
+terraform workspace delete dev
 ```
 
----
-
-## **Important Notes**
-
-- The `terraform.tfstate` file is auto-generated. Do not edit it manually.
-- You can version control it in learning projects but consider using remote state (e.g., AWS S3) in production.
-- Terraform does not detect changes made outside of its control unless you run `terraform refresh`.
+Always clean up after completing an exercise to avoid conflicts or quota issues.
 
 ---
 
 ## **Final Objective**
 
-By the end of this exercise, you should be able to:
-- Understand how to use Terraform to deploy Kubernetes resources
-- Apply the IaC approach to manage application deployments
-- Track and destroy infrastructure cleanly
-- Appreciate the advantages of Terraform in cloud-native SRE workflows
+You now have hands-on experience with:
+
+* Writing and applying Terraform configurations
+* Managing Kubernetes infrastructure as code
+* Using Terraform features like state, variables, outputs, and workspaces
+* Deploying multi-tier apps in Kubernetes
+* Troubleshooting drift and changes safely
+
+These practices are foundational for modern Site Reliability Engineers working in cloud-native and DevOps environments.
+
+---
+
+## **Next Steps**
+
+In [Exercise 16](../exercise16), you will automate this workflow using GitHub Actions. You’ll build a CI/CD pipeline that deploys infrastructure with Terraform on every code push or pull request.
 
 ---
