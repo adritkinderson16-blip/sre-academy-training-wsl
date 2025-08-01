@@ -108,23 +108,54 @@ In this phase, you will prepare your local environment and initialize your new G
 
 ### **Step 1: Prepare Your Repository**
 
-On GitHub, create a **new public repository** (e.g., `sre-cicd-pipeline`). Do not add a README or any other files.
+### Create a New Repository on GitHub
 
-Then, on your local machine, navigate to the `sre-academy-training/exercises/exercise16` directory and initialize the Git repository:
+1. Go to [https://github.com/new](https://github.com/new)
+2. **Repository name**: `sre-cicd-pipeline`
+3. **Visibility**: Public (recommended for this exercise)
+4. Leave **“Initialize this repository with a README”** **unchecked**
+5. Click **Create repository**
+
+### Prepare Your Local Directory
+
+In your terminal:
 
 ```bash
-# Navigate to the exercise files
-cd sre-academy-training/exercises/exercise16
+# Create a clean destination folder
+mkdir -p ~/Projects/sre-cicd-pipeline
 
-# Initialize a new git repo and add the files
+# Copy only the contents of exercise16 into it
+cp -r ~/Downloads/sre-academy-training-main/exercises/exercise16/* ~/Projects/sre-cicd-pipeline/
+
+> NOTE: Your source path may vary depending on where you downloaded the repository.
+> Replace ~/Downloads/... with the actual path to your local copy of the SRE Academy repo.
+
+# Navigate to your new working directory
+cd ~/Projects/sre-cicd-pipeline
+```
+
+### Initialize Git and Commit Locally
+
+```bash
 git init
 git add .
-git commit -m "Initial commit for CI/CD pipeline exercise"
+git commit -m "Initial commit - standalone CI/CD pipeline"
+```
 
-# Link to your new public GitHub repository
-git remote add origin https://github.com/YOUR-USERNAME/YOUR-NEW-REPO.git
+### Link to GitHub and Push
+
+Replace `YOUR-USERNAME` with your actual GitHub username if needed:
+
+```bash
+git remote add origin https://github.com/YOUR-USERNAME/sre-cicd-pipeline.git
 git branch -M main
 git push -u origin main
+```
+
+> ❗ If you see an error like “rejected: fetch first,” it means the GitHub repo already has a README or commit. In that case, force the push:
+
+```bash
+git push --force origin main
 ```
 
 ### **Step 2: Update Application Code and Dependencies**
