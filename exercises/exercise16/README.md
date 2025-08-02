@@ -12,7 +12,6 @@
 * [Phase 3: Multi-Environment Deployment](#phase-3-multi-environment-deployment)
 * [Phase 4: Observability and Monitoring](#phase-4-observability-and-monitoring)
 * [Phase 5: Failure Simulation and Recovery](#phase-5-failure-simulation-and-recovery)
-* [Final Validation and Submission](#final-validation-and-submission)
 * [Real-World Extensions and SRE Metrics](#real-world-extensions-and-sre-metrics)
 * [Reflection Questions](#reflection-questions)
 * [Next Steps](#next-steps)
@@ -160,17 +159,15 @@ git push --force origin main
 
 ### **Step 2: Update Application Code and Dependencies**
 
-Now that your repo is initialized, let’s update the application and prepare it for testing.
+Now that your repository is initialized, let’s update the application and prepare it for testing.
 
-#### Fix and Update `app/app.py`
+### Update `app/app.py`
 
-There is a deliberate syntax error in the starter code that you need to fix. You’ll also replace the content with a version that includes health and data endpoints:
+Replace the default content with a production-friendly version that includes two endpoints (`/health` and `/api/data`) and prints clear instructions to the terminal when running locally.
+
+Run the following command to overwrite `app.py`:
 
 ```bash
-# Fix the syntax error in app.py
-sed -i 's/**name**/__name__/g' app/app.py
-
-# Replace the content with the SRE-friendly version
 cat <<EOF > app/app.py
 from flask import Flask, jsonify
 import os
@@ -195,6 +192,11 @@ def get_data():
     })
 
 if __name__ == "__main__":
+    print("Flask app initialized.")
+    print("To test the app, run the following commands in a separate terminal:")
+    print("  curl http://localhost:8080/health")
+    print("  curl http://localhost:8080/api/data")
+    print("Then press Ctrl+C to exit.")
     app.run(host='0.0.0.0', port=8080)
 EOF
 ```
@@ -256,11 +258,14 @@ python -m pytest
 python app.py
 ```
 
-In a separate terminal:
+> This app doesn't serve a homepage (`/`) or favicon, so you should not open it in a browser.
+> You should **run the curl commands** manually to test the API.
+> Example:
 
-```bash
-curl http://localhost:8080/health
-```
+  ```bash
+  curl http://localhost:8080/health
+  curl http://localhost:8080/api/data
+  ```
 
 You should receive a JSON response indicating the app is healthy.
 
@@ -278,7 +283,16 @@ git push origin main
 
 ## Phase 1: Basic Pipeline Foundation
 
-In this phase, you will create the core CI pipeline that runs tests and quality checks every time code is pushed. This ensures the application is healthy before deploying to any environment.
+In this phase, you will create the core CI pipeline that runs **unit tests** and **code quality checks** every time code is pushed. This is your first reliability gate — it ensures that broken or non-compliant code **never reaches your main branch**.
+
+This early automation step helps you:
+
+* Catch issues as soon as they happen (shift-left testing)
+* Enforce consistent style and clean code practices across teams
+* Prevent bugs from progressing to more expensive stages (e.g., staging or production)
+* Build trust in every commit as part of a healthy software delivery lifecycle
+
+As an SRE, these gates are the first signal that your system is behaving as expected before deployment even begins.
 
 ### **Step 1: Create the GitHub Actions Workflow File**
 
@@ -357,7 +371,54 @@ git commit -m "Add basic CI pipeline with tests"
 git push origin main
 ```
 
-Go to the **Actions** tab in your GitHub repository to verify that the workflow is triggered and passes successfully.
+Go to the **Actions** tab in your GitHub repository to verify that the workflow is triggered.
+
+### Intentional First Failure: Code Formatting
+
+> 🔥 The first time you push, the pipeline will likely **fail on the `black --check .` step**.
+
+This is intentional.
+
+The purpose of this check is to prevent non-compliant code from entering `main`. It teaches you to:
+
+* Observe CI feedback
+* Fix issues locally
+* Re-commit clean code
+
+You’ll likely see a message like:
+
+```bash
+would reformat app.py
+would reformat test_app.py
+
+Oh no! 💥 💔 💥
+2 files would be reformatted.
+```
+
+To fix it:
+
+```bash
+cd app
+black .
+```
+
+This command runs [**Black**](https://black.readthedocs.io/en/stable/), a Python code formatter that automatically rewrites your code to follow a strict style guide.
+
+* `black` is the tool
+* `.` tells it to format **all Python files in the current directory**
+* It modifies your code in place to make it compliant
+
+After running the command, your files will be updated automatically.
+
+Then re-commit and push the changes:
+
+```bash
+git add .
+git commit -m "Fix formatting to pass Black check"
+git push origin main
+```
+
+Once pushed, the pipeline should now pass.
 
 ---
 
@@ -372,8 +433,10 @@ These quality gates ensure that code changes are secure and meet best practices 
 This script evaluates the results of `safety` and `bandit`, which check for known vulnerabilities and insecure coding patterns. If any critical issues are found, the script will fail the pipeline.
 
 ```bash
+# Step 1: Create the scripts directory
 mkdir scripts
 
+# Step 2: Write the security evaluation script
 cat <<EOF > scripts/evaluate-security.py
 #!/usr/bin/env python3
 import json
@@ -418,48 +481,125 @@ if __name__ == "__main__":
     evaluate_security_results()
 EOF
 
+# Step 3: Make the script executable
 chmod +x scripts/evaluate-security.py
 ```
 
 ### **Step 2: Add the Security Scan Job to Your Workflow**
 
-Now update the `.github/workflows/ci-cd.yml` file to include a new job called `security-scan`. This job runs only after the `test` job completes successfully.
+Now that you’ve established a baseline for testing and code quality, it's time to integrate **security scanning** into your CI/CD pipeline.
+
+In this step, you'll add a new job named `security-scan` to your GitHub Actions workflow. This job will run **only if the `test` job passes**, ensuring that only tested and syntactically valid code is scanned for security issues.
+
+---
+
+#### Why is this important?
+
+As an SRE or DevSecOps engineer, your responsibility doesn't end at passing tests — you also need to prevent insecure code from reaching production. This security job helps you:
+
+* **Catch known vulnerabilities** in your Python dependencies using [Safety](https://github.com/pyupio/safety)
+* **Perform static analysis** on your code using [Bandit](https://bandit.readthedocs.io/) to find insecure coding practices (e.g., use of `eval`, hardcoded passwords, etc.)
+* **Fail the pipeline automatically** if critical issues are found
+
+Adding this stage ensures that **security becomes a default part of your development lifecycle**, not an afterthought.
+
+---
+
+### What you'll do:
+
+* Add a new `security-scan` job to your pipeline
+* Ensure it depends on the successful completion of the `test` job
+* Automate security evaluations with `safety` and `bandit`
+* Use a helper script to fail the job if critical vulnerabilities are detected
+
+---
+
+### Next step:
+
+Update the `.github/workflows/ci-cd.yml` file to include the `security-scan` job. Replace the entire file with the updated version provided below.
+
+> 🔒 Security should never be optional in a modern pipeline — this job enforces that principle automatically.
 
 ```yaml
+name: SRE Production Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    name: Run Tests and Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd app
+          pip install -r requirements.txt
+          pip install pytest-cov black flake8
+
+      - name: Code formatting check
+        run: |
+          cd app
+          black --check .
+
+      - name: Linting
+        run: |
+          cd app
+          flake8 . --max-line-length=100
+
+      - name: Run unit tests
+        run: |
+          cd app
+          pytest --cov=. --cov-report=xml --cov-report=term
+
   security-scan:
     name: Security Analysis
     runs-on: ubuntu-latest
     needs: test
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    - name: Install security tools
-      run: |
-        pip install safety bandit
+      - name: Install security tools
+        run: |
+          pip install safety bandit
 
-    - name: Check for known vulnerabilities
-      run: |
-        cd app
-        safety check -r requirements.txt --json > safety-report.json || true
+      - name: Check for known vulnerabilities
+        run: |
+          cd app
+          safety check -r requirements.txt --json > safety-report.json || true
 
-    - name: Static security analysis
-      run: |
-        cd app
-        bandit -r . -f json -o bandit-report.json || true
+      - name: Static security analysis
+        run: |
+          cd app
+          bandit -r . -f json -o bandit-report.json || true
 
-    - name: Evaluate security results
-      run: |
-        python scripts/evaluate-security.py
+      - name: Evaluate security results
+        run: |
+          python scripts/evaluate-security.py
 ```
-
-💡 `|| true` allows the pipeline to continue even if the scanner exits with a non-zero code. The results will be handled and evaluated by the `evaluate-security.py` script.
 
 ### **Step 3: Commit and Test the Security Pipeline**
 
@@ -480,15 +620,32 @@ Both should pass, unless a critical vulnerability is detected.
 
 ## Phase 3: Multi-Environment Deployment
 
-A production-ready pipeline should support multiple environments such as `staging` and `production`. In this phase, you will simulate deploying your application to both environments after passing tests and security scans.
+A production-grade pipeline doesn’t stop after running tests and scanning for security issues. It must support **progressive delivery** through multiple environments (like `staging` and `production`), ensuring reliability at every stage.
 
-We’ll also simulate smoke and performance tests to ensure deployments are healthy before promoting them forward.
+In this phase, we’ll simulate this using three additional jobs in the pipeline:
+
+* `build`: Generates a container image (simulated)
+* `deploy-staging`: Deploys the app to a staging environment and runs verification tests
+* `deploy-production`: Deploys the app to a production environment if staging passes
+
+But before we can automate these deployments, we need test scripts to verify that each environment is healthy. That’s where our work begins.
+
+---
 
 ### **Step 1: Create Helper Scripts for Validation**
 
-These Python scripts simulate realistic verification of deployed services.
+In this step, you’ll generate two Python scripts:
+
+* `smoke-tests.py`: Simulates verifying the application's health and basic functionality after a deployment.
+* `performance-test.py`: Simulates performance testing by generating random latency metrics for a specified duration.
+
+These scripts will later be executed automatically as part of the `deploy-staging` and `deploy-production` jobs in the pipeline.
+
+> You’ll use the `cat <<EOF > filename.py` method to write each script to disk. This technique ensures proper formatting and avoids manual indentation errors.
 
 #### `scripts/smoke-tests.py`
+
+This script simulates basic health checks and API verification.
 
 ```bash
 cat <<EOF > scripts/smoke-tests.py
@@ -528,7 +685,11 @@ if __name__ == "__main__":
 EOF
 ```
 
+---
+
 #### `scripts/performance-test.py`
+
+This script simulates a performance test by printing randomized latency numbers for a given duration.
 
 ```bash
 cat <<EOF > scripts/performance-test.py
@@ -555,23 +716,118 @@ if __name__ == "__main__":
 EOF
 ```
 
+---
+
+### Make the scripts executable
+
+Once both scripts have been created, make sure they are executable by the CI runner:
+
 ```bash
 chmod +x scripts/*.py
 ```
 
+This step is required so that GitHub Actions can run the scripts without permission errors during the `deploy-staging` and `deploy-production` jobs.
+
+---
+
 ### **Step 2: Add Build and Deployment Jobs to the Pipeline**
 
-Now, update `.github/workflows/ci-cd.yml` with three new jobs:
+Now that your validation scripts are in place, it’s time to expand your `.github/workflows/ci-cd.yml` file to simulate:
 
-* `build`: Simulates container image creation
-* `deploy-staging`: Simulates deploying to a staging environment
-* `deploy-production`: Simulates promoting to production
+* Building the application (with metadata and digests)
+* Deploying to a `staging` environment
+* Running smoke and performance tests in staging
+* Promoting to a `production` environment once staging passes
 
-Each job will depend on the previous one to enforce a gated flow.
+Each of these jobs is gated by the previous one using the `needs:` keyword — this creates a reliable, test-driven release flow.
 
-#### Add the `build` job:
+By chaining these jobs together, you’re simulating a **progressive delivery model**, where code must pass increasing levels of scrutiny before reaching production.
 
-```yaml
+---
+
+#### Add the pipeline jobs using this command:
+
+```bash
+cat <<EOF > .github/workflows/ci-cd.yml
+name: SRE Production Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: \${{ github.repository }}
+
+jobs:
+  test:
+    name: Run Tests and Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd app
+          pip install -r requirements.txt
+          pip install pytest-cov black flake8
+
+      - name: Code formatting check
+        run: |
+          cd app
+          black --check .
+
+      - name: Linting
+        run: |
+          cd app
+          flake8 . --max-line-length=100
+
+      - name: Run unit tests
+        run: |
+          cd app
+          pytest --cov=. --cov-report=xml --cov-report=term
+
+  security-scan:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install security tools
+        run: |
+          pip install safety bandit
+
+      - name: Check for known vulnerabilities
+        run: |
+          cd app
+          safety check -r requirements.txt --json > safety-report.json || true
+
+      - name: Static security analysis
+        run: |
+          cd app
+          bandit -r . -f json -o bandit-report.json || true
+
+      - name: Evaluate security results
+        run: |
+          python scripts/evaluate-security.py
+
   build:
     name: Build and Push Image
     runs-on: ubuntu-latest
@@ -579,33 +835,29 @@ Each job will depend on the previous one to enforce a gated flow.
     if: github.ref == 'refs/heads/main'
 
     outputs:
-      image-digest: ${{ steps.build.outputs.digest }}
-      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: \${{ steps.build.outputs.digest }}
+      image-tag: \${{ steps.meta.outputs.tags }}
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=sha,prefix={{branch}}-
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: \${{ env.REGISTRY }}/\${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
 
-    - name: Build and push image (simulated)
-      id: build
-      run: |
-        echo "Building image for commit: ${{ github.sha }}"
-        echo "Image would be tagged as: ${{ steps.meta.outputs.tags }}"
-        echo "digest=sha256:$(date +%s | sha256sum | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-```
+      - name: Build and push image (simulated)
+        id: build
+        run: |
+          echo "Building image for commit: \${{ github.sha }}"
+          echo "Image would be tagged as: \${{ steps.meta.outputs.tags }}"
+          echo "digest=sha256:\$(date +%s | sha256sum | cut -d' ' -f1)" >> \$GITHUB_OUTPUT
 
-#### Add the `deploy-staging` job:
-
-```yaml
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
@@ -613,28 +865,24 @@ Each job will depend on the previous one to enforce a gated flow.
     environment: staging
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Deploy to staging cluster (simulated)
-      run: |
-        echo "🚀 Deploying to staging environment"
-        echo "Image: ${{ needs.build.outputs.image-tag }}"
-        sleep 10
-        echo "✅ Deployment to staging completed"
+      - name: Deploy to staging cluster (simulated)
+        run: |
+          echo "🚀 Deploying to staging environment"
+          echo "Image: \${{ needs.build.outputs.image-tag }}"
+          sleep 10
+          echo "✅ Deployment to staging completed"
 
-    - name: Run smoke tests
-      run: |
-        python scripts/smoke-tests.py --environment=staging
+      - name: Run smoke tests
+        run: |
+          python scripts/smoke-tests.py --environment=staging
 
-    - name: Performance baseline test
-      run: |
-        python scripts/performance-test.py --duration=30 --environment=staging
-```
+      - name: Performance baseline test
+        run: |
+          python scripts/performance-test.py --duration=30 --environment=staging
 
-#### Add the `deploy-production` job:
-
-```yaml
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
@@ -642,24 +890,27 @@ Each job will depend on the previous one to enforce a gated flow.
     environment: production
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Deploy to production cluster (simulated)
-      run: |
-        echo "🚀 Deploying to production environment"
-        echo "Image: ${{ needs.build.outputs.image-tag }}"
-        sleep 15
-        echo "✅ Production deployment completed"
+      - name: Deploy to production cluster (simulated)
+        run: |
+          echo "🚀 Deploying to production environment"
+          echo "Image: \${{ needs.build.outputs.image-tag }}"
+          sleep 15
+          echo "✅ Production deployment completed"
 
-    - name: Post-deployment verification
-      run: |
-        echo "🔍 Running post-deployment verification..."
-        sleep 5
-        echo "✅ All systems healthy"
+      - name: Post-deployment verification
+        run: |
+          echo "🔍 Running post-deployment verification..."
+          sleep 5
+          echo "✅ All systems healthy"
+EOF
 ```
 
 ### **Step 3: Commit and Run the Full Pipeline**
+
+Now that you’ve written the test scripts and defined the new deployment jobs, commit and push your changes:
 
 ```bash
 git add scripts/smoke-tests.py scripts/performance-test.py .github/workflows/ci-cd.yml
@@ -667,26 +918,32 @@ git commit -m "Add multi-environment deployment pipeline"
 git push origin main
 ```
 
-Once pushed, your pipeline will include:
+Once your pipeline runs:
 
-1. Code validation (tests and security)
-2. Build
-3. Deploy to Staging + Tests
-4. Deploy to Production
+1. Code is tested and scanned for security
+2. A container image is simulated and metadata is generated
+3. The app is deployed to a staging environment, where smoke and performance tests are run
+4. If staging passes, it’s promoted to production for final verification
 
-Each stage simulates a real CI/CD progression with validation gates.
+This structure mirrors how modern SRE teams validate releases safely and reliably.
 
 ---
 
 ## Phase 4: Observability and Monitoring
 
-A reliable CI/CD pipeline should include observability mechanisms that validate the performance and health of the deployed service.
+Even after a successful production deployment, your job as an SRE isn’t done. You must ensure that the service remains **healthy and performant**. That’s where observability practices come in.
 
-In this phase, you'll simulate a Service Level Objective (SLO) check — a critical SRE practice — after deploying to production.
+In this phase, you’ll simulate an **SLO (Service Level Objective)** check — a critical component of post-deployment validation that helps determine whether the service is meeting user expectations.
 
-### **Step 1: Create a Script for SLO Monitoring**
+---
 
-This script will simulate checking the service’s availability and latency against defined thresholds.
+### **Step 1: Create the SLO Monitoring Script**
+
+You will now create a Python script called `slo-check.py` that simulates measuring **availability** and **latency** of the service against pre-defined thresholds.
+
+This script will be executed by the pipeline **after production deployment**, and if SLOs are not met, it will return a non-zero exit code (causing the job to fail).
+
+> Like before, we’ll use `cat <<EOF >` to generate the script, ensuring correct formatting.
 
 ```bash
 cat <<EOF > scripts/slo-check.py
@@ -701,8 +958,8 @@ def check_slo(environment, window, availability_target, latency_target):
     print(f"   Availability target: {availability_target}%")
     print(f"   Latency target: {latency_target}ms")
 
+    # Simulate real-world delay and random metrics
     time.sleep(5)
-
     current_availability = random.uniform(99.5, 99.99)
     current_latency = random.uniform(100, 300)
 
@@ -734,17 +991,181 @@ if __name__ == "__main__":
     if not success:
         exit(1)
 EOF
+```
 
+Then make the script executable:
+
+```bash
 chmod +x scripts/slo-check.py
 ```
 
-### **Step 2: Add the SLO Check Job to Your Workflow**
+---
 
-Now you’ll add a new `slo-check` job to `.github/workflows/ci-cd.yml`, which runs after `deploy-production`.
+### **Step 2: Add the SLO Check Job to Your Pipeline**
 
-This job checks if the deployed service meets the desired SLO thresholds.
+Now that you have the script ready, the next step is to **add a new job** to your GitHub Actions workflow.
 
-```yaml
+This job, named `slo-check`, runs **after `deploy-production`**. It verifies that the deployed service still meets your SLOs for **availability** and **late
+
+```bash
+cat <<EOF > .github/workflows/ci-cd.yml
+name: SRE Production Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: \${{ github.repository }}
+
+jobs:
+  test:
+    name: Run Tests and Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd app
+          pip install -r requirements.txt
+          pip install pytest-cov black flake8
+
+      - name: Code formatting check
+        run: |
+          cd app
+          black --check .
+
+      - name: Linting
+        run: |
+          cd app
+          flake8 . --max-line-length=100
+
+      - name: Run unit tests
+        run: |
+          cd app
+          pytest --cov=. --cov-report=xml --cov-report=term
+
+  security-scan:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install security tools
+        run: |
+          pip install safety bandit
+
+      - name: Check for known vulnerabilities
+        run: |
+          cd app
+          safety check -r requirements.txt --json > safety-report.json || true
+
+      - name: Static security analysis
+        run: |
+          cd app
+          bandit -r . -f json -o bandit-report.json || true
+
+      - name: Evaluate security results
+        run: |
+          python scripts/evaluate-security.py
+
+  build:
+    name: Build and Push Image
+    runs-on: ubuntu-latest
+    needs: [test, security-scan]
+    if: github.ref == 'refs/heads/main'
+
+    outputs:
+      image-digest: \${{ steps.build.outputs.digest }}
+      image-tag: \${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: \${{ env.REGISTRY }}/\${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+
+      - name: Build and push image (simulated)
+        id: build
+        run: |
+          echo "Building image for commit: \${{ github.sha }}"
+          echo "Image would be tagged as: \${{ steps.meta.outputs.tags }}"
+          echo "digest=sha256:\$(date +%s | sha256sum | cut -d' ' -f1)" >> \$GITHUB_OUTPUT
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    environment: staging
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging cluster (simulated)
+        run: |
+          echo "🚀 Deploying to staging environment"
+          echo "Image: \${{ needs.build.outputs.image-tag }}"
+          sleep 10
+          echo "✅ Deployment to staging completed"
+
+      - name: Run smoke tests
+        run: |
+          python scripts/smoke-tests.py --environment=staging
+
+      - name: Performance baseline test
+        run: |
+          python scripts/performance-test.py --duration=30 --environment=staging
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, deploy-staging]
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to production cluster (simulated)
+        run: |
+          echo "🚀 Deploying to production environment"
+          echo "Image: \${{ needs.build.outputs.image-tag }}"
+          sleep 15
+          echo "✅ Production deployment completed"
+
+      - name: Post-deployment verification
+        run: |
+          echo "🔍 Running post-deployment verification..."
+          sleep 5
+          echo "✅ All systems healthy"
+
   slo-check:
     name: Verify SLOs
     runs-on: ubuntu-latest
@@ -752,39 +1173,59 @@ This job checks if the deployed service meets the desired SLO thresholds.
     if: always()
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Check Service Level Objectives
-      run: |
-        python scripts/slo-check.py \
-          --environment=production \
-          --window=15min \
-          --availability-target=99.9 \
-          --latency-target=200
+      - name: Check Service Level Objectives
+        run: |
+          python scripts/slo-check.py \
+            --environment=production \
+            --window=15min \
+            --availability-target=99.9 \
+            --latency-target=200
+EOF
 ```
+---
 
-### **Step 3: Commit and Push**
+### **Step 3: Commit and Push the Changes**
+
+Run the following commands to add the script and update your pipeline definition:
 
 ```bash
 git add scripts/slo-check.py .github/workflows/ci-cd.yml
-git commit -m "Add SLO monitoring to pipeline"
+git commit -m "Add SLO monitoring to pipeline after production deployment"
 git push origin main
 ```
 
-Your workflow now includes a post-deployment observability phase that ensures your service meets expectations before it’s considered stable.
+---
+
+### What You’ve Accomplished
+
+Your pipeline now includes a **post-deployment observability phase** — just like in real-world SRE practice. It validates not only that the app was deployed, but also that it meets performance and reliability expectations before it’s declared stable.
+
+You’ve introduced the foundation for:
+
+* Automated reliability enforcement
+* Progressive delivery with measurable quality gates
+* Real SRE culture in CI/CD automation
 
 ---
 
 ## Phase 5: Failure Simulation and Recovery
 
-SREs plan for failure. This phase focuses on handling and recovering from failed deployments.
+Failure is inevitable. As an SRE, your job is to plan for it and recover gracefully.
 
-You’ll add a rollback mechanism to your pipeline that gets triggered only if the `deploy-production` job fails.
+In this phase, you’ll simulate a **production failure** and implement an **automated rollback mechanism**. If the production deployment job (`deploy-production`) fails, a new job (`automated-rollback`) will trigger and restore a previous version.
 
-### **Step 1: Create a Rollback Script**
+This is the final phase that completes a reliable, resilient CI/CD pipeline.
 
-This script simulates rolling back to the previous version of the application:
+---
+
+### **Step 1: Create the Rollback Script**
+
+You’ll begin by creating a script called `rollback.py`. This simulates identifying the last known good version of the application and rolling back to it.
+
+Like before, we’ll use a `cat <<EOF` block to avoid indentation errors.
 
 ```bash
 cat <<EOF > scripts/rollback.py
@@ -814,11 +1255,193 @@ EOF
 chmod +x scripts/rollback.py
 ```
 
+This script will later be invoked automatically by GitHub Actions if your production deployment fails.
+
+---
+
 ### **Step 2: Add the Rollback Job to Your Workflow**
 
-Append a new job to `.github/workflows/ci-cd.yml` that only runs if `deploy-production` fails:
+Now you’ll add a job to `.github/workflows/ci-cd.yml` called `automated-rollback`. This job runs only when `deploy-production` fails. It simulates an emergency recovery procedure.
 
-```yaml
+To avoid YAML indentation errors, use this command to regenerate the full workflow file (with rollback logic included):
+
+```bash
+cat <<EOF > .github/workflows/ci-cd.yml
+name: SRE Production Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: \${{ github.repository }}
+
+jobs:
+  test:
+    name: Run Tests and Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd app
+          pip install -r requirements.txt
+          pip install pytest-cov black flake8
+
+      - name: Code formatting check
+        run: |
+          cd app
+          black --check .
+
+      - name: Linting
+        run: |
+          cd app
+          flake8 . --max-line-length=100
+
+      - name: Run unit tests
+        run: |
+          cd app
+          pytest --cov=. --cov-report=xml --cov-report=term
+
+  security-scan:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install security tools
+        run: |
+          pip install safety bandit
+
+      - name: Check for known vulnerabilities
+        run: |
+          cd app
+          safety check -r requirements.txt --json > safety-report.json || true
+
+      - name: Static security analysis
+        run: |
+          cd app
+          bandit -r . -f json -o bandit-report.json || true
+
+      - name: Evaluate security results
+        run: |
+          python scripts/evaluate-security.py
+
+  build:
+    name: Build and Push Image
+    runs-on: ubuntu-latest
+    needs: [test, security-scan]
+    if: github.ref == 'refs/heads/main'
+
+    outputs:
+      image-digest: \${{ steps.build.outputs.digest }}
+      image-tag: \${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: \${{ env.REGISTRY }}/\${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+
+      - name: Build and push image (simulated)
+        id: build
+        run: |
+          echo "Building image for commit: \${{ github.sha }}"
+          echo "Image would be tagged as: \${{ steps.meta.outputs.tags }}"
+          echo "digest=sha256:\$(date +%s | sha256sum | cut -d' ' -f1)" >> \$GITHUB_OUTPUT
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    environment: staging
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging cluster (simulated)
+        run: |
+          echo "🚀 Deploying to staging environment"
+          echo "Image: \${{ needs.build.outputs.image-tag }}"
+          sleep 10
+          echo "✅ Deployment to staging completed"
+
+      - name: Run smoke tests
+        run: |
+          python scripts/smoke-tests.py --environment=staging
+
+      - name: Performance baseline test
+        run: |
+          python scripts/performance-test.py --duration=30 --environment=staging
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, deploy-staging]
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to production cluster (simulated)
+        run: |
+          echo "🚀 Deploying to production environment"
+          echo "Image: \${{ needs.build.outputs.image-tag }}"
+          sleep 15
+          echo "✅ Production deployment completed"
+
+      - name: Post-deployment verification
+        run: |
+          echo "🔍 Running post-deployment verification..."
+          sleep 5
+          echo "✅ All systems healthy"
+
+  slo-check:
+    name: Verify SLOs
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check Service Level Objectives
+        run: |
+          python scripts/slo-check.py \
+            --environment=production \
+            --window=15min \
+            --availability-target=99.9 \
+            --latency-target=200
+
   automated-rollback:
     name: Automated Rollback
     runs-on: ubuntu-latest
@@ -826,109 +1449,123 @@ Append a new job to `.github/workflows/ci-cd.yml` that only runs if `deploy-prod
     if: failure()
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Trigger rollback
-      run: |
-        echo "❌ Production deployment failed, initiating rollback"
-        python scripts/rollback.py \
-          --environment=production \
-          --reason="Failed deployment: ${{ github.sha }}"
+      - name: Trigger rollback
+        run: |
+          echo "❌ Production deployment failed, initiating rollback"
+          python scripts/rollback.py \
+            --environment=production \
+            --reason="Failed deployment: \${{ github.sha }}"
 
-    - name: Verify rollback success
-      run: |
-        echo "🔍 Verifying rollback success..."
-        sleep 5
-        echo "✅ Rollback verification completed"
-```
-
-### **Step 3: Simulate a Failure**
-
-To test rollback, intentionally break your application.
-
-```bash
-# Break the code by adding invalid syntax
-echo "broken code" >> app/app.py
-
-git add app/app.py
-git commit -m "Test failure scenario (broken code)"
-git push origin main
-```
-
-### **Observe the Pipeline**
-
-* The `deploy-production` job will fail
-* The `automated-rollback` job will be triggered and run successfully
-
-### **Step 4: Revert and Fix the Code**
-
-```bash
-# Revert the broken code
-git checkout HEAD~1 app/app.py
-
-git add app/app.py
-git commit -m "Fix application after testing rollback"
-git push origin main
-```
-
-This restores the original pipeline and verifies that everything works after rollback.
-
----
-
-## Final Validation and Submission
-
-Now that your pipeline is complete, you'll finalize the exercise by documenting your work and validating that each phase was successful.
-
-### **Step 1: Document Your Results in `RESULTS.md`**
-
-Create a file in the root of your repository to summarize what you built:
-
-```bash
-cat <<EOF > RESULTS.md
-# CI/CD Pipeline Results
-
-## Pipeline URL
-[Your GitHub Actions URL here]
-
-## Successful Features Implemented
-- [x] Basic CI with tests and linting
-- [x] Security scanning with vulnerability detection
-- [x] Multi-environment deployment (staging → production)
-- [x] Automated smoke tests
-- [x] Performance baseline testing
-- [x] SLO monitoring
-- [x] Automated rollback on failure
-
-## Key Metrics Achieved
-- Pipeline Duration: ~10–15 minutes
-- Security Scans: Passing
-- Test Coverage: 100%
-- Deployment Success: Verified
-
-## Lessons Learned
-1. Automated pipelines prevent human errors.
-2. Security scanning catches vulnerabilities early.
-3. Multi-environment deployment reduces production risk.
-
-## Production Readiness Assessment
-Rating: 8/10 — Would need real monitoring integration and actual Kubernetes deployment for production use.
+      - name: Verify rollback success
+        run: |
+          echo "🔍 Verifying rollback success..."
+          sleep 5
+          echo "✅ Rollback verification completed"
 EOF
 ```
 
-### **Step 2: Commit and Submit**
+This ensures that rollbacks only run when a production release is broken — a best practice in real-world CI/CD systems.
+
+---
+
+### **Step 3: Simulate a Failure to Trigger Rollback**
+
+To confirm that your automated rollback mechanism works as intended, you’ll now simulate a production deployment failure.
+
+However, it's important to understand how GitHub Actions workflows are structured:
+
+* Jobs like `test` and `security-scan` run first to ensure that only valid, secure code proceeds through the pipeline.
+* If you inject a syntax error or break the application code early, the pipeline will stop in the **test phase**, and **the deployment jobs will never be reached**.
+* As a result, the `automated-rollback` job will not be triggered because it only runs **if `deploy-production` fails** — and that job will be skipped if earlier checks fail.
+
+To accurately test rollback, we need to **allow the code to pass initial stages** and **fail specifically at the production deployment step**.
+
+---
+
+#### **Option: Simulate the Failure in the Production Deployment Step**
+
+Open `.github/workflows/ci-cd.yml` and temporarily modify the `deploy-production` job to include a forced failure.
+
+Replace this block:
+
+```yaml
+- name: Deploy to production cluster (simulated)
+  run: |
+    echo "Deploying to production environment"
+    echo "Image: ${{ needs.build.outputs.image-tag }}"
+    sleep 15
+    echo "Production deployment completed"
+```
+
+With this:
+
+```yaml
+- name: Deploy to production cluster (simulated failure)
+  run: |
+    echo "Deploying to production environment"
+    echo "Image: ${{ needs.build.outputs.image-tag }}"
+    exit 1  # Force failure to trigger rollback
+```
+
+This simulates a real deployment error, such as a failed Helm release, infrastructure issue, or crash during rollout.
+
+---
+
+#### **Step-by-Step: Test the Rollback Logic**
+
+1. Edit the file as described and commit the change:
 
 ```bash
-git add RESULTS.md
-git commit -m "Final results and documentation"
+git add .github/workflows/ci-cd.yml
+git commit -m "Simulate production failure to trigger rollback"
 git push origin main
 ```
 
-To complete the exercise, submit:
+2. Open the **Actions** tab on your GitHub repository.
 
-* A link to your GitHub repository
-* A link to a successful pipeline run
-* Your completed `RESULTS.md` file
+You should observe the following:
+
+* The `test`, `security-scan`, `build`, and `deploy-staging` jobs run successfully.
+* The `deploy-production` job fails due to the forced `exit 1` command.
+* The `automated-rollback` job is triggered automatically as a result of the failure.
+
+This allows you to verify the recovery logic in a controlled and intentional way, without needing to break earlier pipeline functionality.
+
+---
+
+### **Step 4: Revert and Fix the Code**
+
+Although the rollback job ran successfully, it did **not** actually fix the broken code. You need to manually restore the application to a working state so future pipeline runs can succeed.
+
+> **Note:** The rollback job only simulates recovery — it does not revert files in your Git repository. Real pipelines would require integration with deployment tools or GitOps workflows to perform automatic rollbacks.
+
+#### Revert the entire commit
+
+To undo everything added in the previous commit (including a broken pipeline):
+
+```bash
+git revert HEAD
+git push origin main
+```
+
+This creates a new commit that reverses the last one.
+
+---
+
+### What You’ve Achieved
+
+Your pipeline now includes:
+
+* Resilient multi-environment delivery
+* Observability and SLO-based validation
+* Failure handling with automatic rollback
+
+This is the **final piece** in your CI/CD puzzle — a safety net that helps teams release confidently, detect failures quickly, and recover fast.
+
+---
 
 🎉 **Done!** You've implemented a robust, automated, SRE-grade CI/CD pipeline.
 
