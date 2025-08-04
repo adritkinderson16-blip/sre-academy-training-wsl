@@ -73,15 +73,19 @@ By the end of this exercise you will:
 ### **Verify Your Prerequisites**
 
 ```bash
-# Check cluster connectivity
-kubectl version --short
+# Check kubectl client version
+kubectl version --client
+
+# Check cluster connectivity by listing nodes
+kubectl version          # you’ll see both Client and Server versions
 kubectl get nodes
 
-# Verify ArgoCD is running
+# Verify ArgoCD server pod is running
 kubectl get pods -n argocd | grep argocd-server
 
 # Test ArgoCD CLI connection
-argocd version
+argocd version --client   # checks your CLI version
+argocd version            # shows both CLI and server versions
 ```
 
 ### 1. Create Your Personal GitHub Repo
@@ -143,7 +147,14 @@ We'll create two folders—`v1/` (stable) and `v2/` (faulty)—each with a Deplo
 ```bash
 # Create directory structure
 mkdir -p v1
+```
 
+> **⚠️ Remember:**
+>
+> * Replace `<YOUR-USERNAME>` with your actual DockerHub username (or the registry path you’re using).
+> * If you forget, Kubernetes won’t be able to pull the container images and your rollout will fail.
+
+```bash
 # Stable v1 deployment
 cat > v1/deployment.yaml <<EOF
 apiVersion: apps/v1
@@ -166,7 +177,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: rsergio07/sre-rollback-demo:v1
+        image: <YOUR-USERNAME>/sre-rollback-demo:v1
         ports: 
         - containerPort: 5000
         # Health checks for safer deployments
@@ -207,7 +218,14 @@ EOF
 ```bash
 # Create directory for faulty version
 mkdir -p v2
+```
 
+> **⚠️ Remember:**
+>
+> * Replace `<YOUR-USERNAME>` with your actual DockerHub username (or the registry path you’re using).
+> * If you forget, Kubernetes won’t be able to pull the container images and your rollout will fail.
+
+```bash
 # Faulty v2 deployment (intentionally broken)
 cat > v2/deployment.yaml <<EOF
 apiVersion: apps/v1
@@ -230,7 +248,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: rsergio07/sre-rollback-demo:v2  # This version is broken!
+        image: <YOUR-USERNAME>/sre-rollback-demo:v2  # This version is broken!
         ports: 
         - containerPort: 5000
         # Same health checks as v1
@@ -496,7 +514,7 @@ kubectl rollout history deployment/sre-rollback-app --revision=3
 
 # Verify we're back to v1 image
 kubectl get deployment sre-rollback-app -o jsonpath='{.spec.template.spec.containers[0].image}'
-# Should show: rsergio07/sre-rollback-demo:v1
+# Should show: <YOUR-USERNAME>/sre-rollback-demo:v1
 ```
 
 ---
