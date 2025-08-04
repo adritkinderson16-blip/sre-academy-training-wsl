@@ -319,13 +319,13 @@ kubectl get pods -n argocd
 **Expected:** All ArgoCD components should be in `Running` state, e.g.:
 
 ```
-argocd-application-controller         1/1 Running
-argocd-applicationset-controller      1/1 Running
-argocd-dex-server                    1/1 Running
-argocd-notifications-controller      1/1 Running
-argocd-redis                         1/1 Running
-argocd-repo-server                  1/1 Running
-argocd-server                       1/1 Running
+argocd-application-controller           1/1 Running
+argocd-applicationset-controller        1/1 Running
+argocd-dex-server                       1/1 Running
+argocd-notifications-controller         1/1 Running
+argocd-redis                            1/1 Running
+argocd-repo-server                      1/1 Running
+argocd-server                           1/1 Running
 ```
 
 ### Step 2 – Access the ArgoCD Dashboard
