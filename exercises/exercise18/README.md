@@ -1,6 +1,6 @@
-# **Rolling Updates & Rollbacks in Kubernetes**
+# Rolling Updates & Rollbacks in Kubernetes
 
-## **Table of Contents**
+## Table of Contents
 
 - [Scenario: A Bad Release in Production](#scenario-a-bad-release-in-production)
 - [Why Rollbacks Matter for SRE](#why-rollbacks-matter-for-sre)
@@ -10,8 +10,10 @@
 - [Phase 1: Prepare Versioned Manifests](#phase-1-prepare-versioned-manifests)
 - [Phase 2: Deploy & Verify v1 (Stable)](#phase-2-deploy--verify-v1-stable)
 - [Phase 3: Simulate Faulty v2 Release](#phase-3-simulate-faulty-v2-release)
-- [Phase 4: Kubernetes Native Rollback](#phase-4-kubernetes-native-rollback)
+- [Phase 4: Kubernetes-Native Rollback](#phase-4-kubernetes-native-rollback)
 - [Phase 5: ArgoCD-Driven Rollback](#phase-5-argocd-driven-rollback)
+- [ArgoCD Rollback Methods](#argocd-rollback-methods)
+- [Verify the Rollback](#verify-the-rollback)
 - [Expected Outcome](#expected-outcome)
 - [Next Steps](#next-steps)
 
@@ -546,7 +548,7 @@ With that context, you’re ready to execute an emergency rollback in Phase 4.
 
 ---
 
-## Phase 4: Kubernetes–Native Rollback
+## Phase 4: Kubernetes Native Rollback
 
 When you applied the faulty v2 manifests, Kubernetes began spinning up new pods that immediately entered `ImagePullBackOff`. Because the rolling-update strategy keeps old pods alive until new ones become Ready, your service at `http://localhost:8081` may continue to return HTTP 200 even though no healthy v2 replicas exist. To reconcile your Deployment’s desired state and remove the broken ReplicaSet, perform a native rollback.
 
@@ -626,6 +628,8 @@ At this stage, your cluster state, service behavior, and rollout history all ref
 
 First, let's create an ArgoCD application that syncs with our GitHub repository:
 
+> Replace YOUR-USERNAME with your actual GitHub username
+
 ```bash
 # Create ArgoCD application manifest
 cat > argocd-app.yaml <<EOF
@@ -650,10 +654,9 @@ spec:
     syncOptions:
     - CreateNamespace=true
 EOF
+```
 
-# Replace YOUR-USERNAME with your actual GitHub username
-sed -i.bak 's/YOUR-USERNAME/your-actual-github-username/g' argocd-app.yaml
-
+```bash
 # Apply the ArgoCD application
 kubectl apply -f argocd-app.yaml
 
@@ -665,97 +668,164 @@ argocd app get sre-rollback-app
 
 ### **Simulate Failure via GitOps**
 
+#### 1. Retrieve Admin Password
+
+Open a new terminal and with the port-forward running, grab your initial admin password from the secret:
+You will use the credentials to log in via CLI and UI. 
+
 ```bash
-# Update ArgoCD app to point to v2 (faulty version)
-kubectl patch application sre-rollback-app -n argocd --type='merge' -p='{"spec":{"source":{"path":"v2"}}}'
-
-# Watch ArgoCD sync the broken version
-echo "ArgoCD will now sync the broken v2 version..."
-argocd app sync sre-rollback-app
-
-# Monitor the deployment failure
-echo "Monitoring pods during GitOps deployment..."
-kubectl get pods -l app=sre-rollback-app -w &
-WATCH_PID=$!
-
-# Let it run for 30 seconds then stop the watch
-sleep 30
-kill $WATCH_PID 2>/dev/null || true
+export ARGOCD_PASSWORD=$(
+  kubectl -n argocd get secret argocd-initial-admin-secret \
+    -o jsonpath="{.data.password}" | base64 --decode
+)
+echo "ArgoCD Admin Password: $ARGOCD_PASSWORD"
 ```
+
+#### 2. Log in via the CLI
+
+Authenticate the `argocd` CLI:
+
+```bash
+argocd login localhost:8080 \
+  --username admin \
+  --password "$ARGOCD_PASSWORD" \
+  --insecure
+```
+
+You can now run `argocd app list` to see your applications, and `argocd app get sre-rollback-app` to view its current status in the CLI.
+
+#### 3. Forward the ArgoCD UI
+
+In one shell, expose the ArgoCD server on localhost:
+
+```bash
+kubectl port-forward svc/argocd-server -n argocd 8080:443 &
+ARGO_UI_PID=$!
+echo "ArgoCD UI available at https://localhost:8080"
+# Open in your browser:
+#   open https://localhost:8080
+```
+
+#### 4. Sync the Faulty Version
+
+Before you apply the patch, open the ArgoCD dashboard.
+
+Now, in your CLI, point ArgoCD at the broken manifests under `v2`:
+
+```bash
+kubectl patch application sre-rollback-app -n argocd \
+  --type='merge' \
+  -p='{"spec":{"source":{"path":"v2"}}}'
+```
+
+Immediately initiate a manual sync:
+
+```bash
+argocd app sync sre-rollback-app
+argocd app wait sre-rollback-app --health --timeout 60
+```
+
+After this, go to the UI and you will notice the application card flipping to **OutOfSync** or **Degraded** in the dashboard. Click the **Failed sync** section to inspect which resources (pods, ReplicaSets) could not deploy—this visual confirmation aligns with the pod pull errors you observed in the cluster.
+
+![Figure 1: ArgoCD Applications Overview showing `sre-rollback-app` in Synced/Progressing state](images/argocd-overview-progressing.png)  
+*Figure 1: ArgoCD Applications Overview (Synced & Progressing)*
+
+![Figure 2: ArgoCD Application Details Tree showing v1 ReplicaSet healthy and v2 ReplicaSet in ImagePullBackOff](images/argocd-details-imagepullbackoff.png)  
+*Figure 2: Application Details Tree (v2 in ImagePullBackOff)*
+
+![Figure 3: ArgoCD Application Details Tree showing application marked as Degraded due to the v2 ReplicaSet failure](images/argocd-details-degraded.png)  
+*Figure 3: Application Details Tree (Degraded State)*
+
+#### 5. Observe Pod Failures
+
+Meanwhile, in your cluster, you can watch the pods crash:
+
+```bash
+kubectl get pods -l app=sre-rollback-app -w
+```
+
+Press `Ctrl+C` when you’ve seen enough of the ImagePullBackOff errors.
+
+#### 6. Clean Up
+
+Once you’re ready to rollback in ArgoCD (or move on), stop the port-forward:
+
+```bash
+kill $ARGO_UI_PID
+```
+
+---
 
 ### **ArgoCD Rollback Methods**
 
-#### **Method 1: Web UI Rollback**
+You have three ways to roll back your application in ArgoCD. Pick the one that best fits your workflow:
 
-1. **Open ArgoCD Dashboard:**
-   ```bash
-   # Ensure port-forward is running
-   kubectl port-forward svc/argocd-server -n argocd 8080:443 &
-   
-   # Open browser
-   open http://localhost:8080  # macOS
-   # or
-   xdg-open http://localhost:8080  # Linux
-   ```
+#### Method 1: Git-Based Rollback (Declarative) — Preferred Method
 
-2. **Navigate to Application:**
-   - Click on `sre-rollback-app`
-   - Go to **History** tab
-   - Find the last successful revision (should be v1)
-   - Click **Rollback** button
-   - Confirm the rollback
-
-#### **Method 2: CLI Rollback**
+For a pure GitOps approach, revert the ArgoCD Application’s source path back to `v1` and let ArgoCD sync automatically:
 
 ```bash
-# List application history
+# Patch the Application manifest to use v1 manifests
+kubectl patch application sre-rollback-app -n argocd \
+  --type='merge' \
+  -p='{"spec":{"source":{"path":"v1"}}}'
+```
+
+#### Method 2: Rollback via the Web UI
+
+1. **Ensure the UI is accessible**
+   In a shell, forward the ArgoCD server and open `https://localhost:8080` in your browser:
+
+   ```bash
+   kubectl port-forward svc/argocd-server -n argocd 8080:443 &
+   open https://localhost:8080    # macOS
+   # xdg-open https://localhost:8080  # Linux
+   ```
+2. **Perform the rollback**
+
+   * Select **Applications** → **sre-rollback-app**
+   * Click the **History and Rollback** tab
+   * Choose the last successful (v1) revision and hit **Rollback**
+   * Confirm in the dialog
+
+#### Method 3: Rollback via the CLI
+
+If you prefer the terminal, use the `argocd` command-line client:
+
+```bash
+# List all revisions
 argocd app history sre-rollback-app
 
-# Rollback to previous revision (adjust revision number as needed)
-LAST_GOOD_REVISION=$(argocd app history sre-rollback-app | grep "v1" | tail -1 | awk '{print $1}')
-echo "Rolling back to revision: $LAST_GOOD_REVISION"
-argocd app rollback sre-rollback-app $LAST_GOOD_REVISION
+# Identify the last v1 revision (adjust the grep if needed)
+LAST_V1_REV=$(argocd app history sre-rollback-app \
+  | grep v1 \
+  | tail -1 \
+  | awk '{print $1}')
 
-# Verify rollback
-argocd app get sre-rollback-app
-# Should show: SyncStatus=Synced, HealthStatus=Healthy
+# Execute the rollback
+echo "Rolling back to revision $LAST_V1_REV"
+argocd app rollback sre-rollback-app "$LAST_V1_REV"
 ```
 
-#### **Method 3: Git-Based Rollback (Most GitOps Way)**
+After the sync completes, the application should show a green “Healthy” icon and your fresh v1 pod alongside the broken v2 ReplicaSet:
+
+![Figure 4: ArgoCD Application Details Tree showing v1 ReplicaSet healthy and v2 ReplicaSet in ImagePullBackOff beside a healthy v1 pod serving traffic](images/argocd-details-healthy.png)  
+*Figure 4: Application Details Tree (Post-Rollback Healthy State)*
+
+---
+
+### Verify the Rollback
+
+After you roll back by any method, confirm that the application is healthy, running v1, and serving the correct content:
 
 ```bash
-# Update the ArgoCD app to point back to v1 via kubectl patch
-kubectl patch application sre-rollback-app -n argocd --type='merge' -p='{"spec":{"source":{"path":"v1"}}}'
-
-# Sync the application
-argocd app sync sre-rollback-app
-
-# Watch the rollback
-argocd app wait sre-rollback-app --health --timeout 180
-```
-
-### **Verify ArgoCD Rollback**
-
-```bash
-# Check application status in ArgoCD
+# 1. Check ArgoCD sync and health status
 argocd app get sre-rollback-app
 
-# Verify pods are healthy
-kubectl get pods -l app=sre-rollback-app
+# 2. Verify pods are using the stable image
+kubectl get pods -l app=sre-rollback-app -o wide
 
-# Test service
-curl -s $SERVICE_URL | grep -E "(Version|Status)" || echo "Service restored"
-
-# Check sync status
-argocd app list | grep sre-rollback-app
-
-# Verify the image is back to the working version
-kubectl get deployment sre-rollback-app -o jsonpath='{.spec.template.spec.containers[0].image}'
-echo ""
-
-# Clean up the background port-forward if running
-pkill -f "kubectl port-forward svc/argocd-server" 2>/dev/null || true
-```
+With these steps, you’ll have fully reverted to the stable v1 release in ArgoCD, validated the rollout, and confirmed your service is serving the expected content.
 
 ---
 
