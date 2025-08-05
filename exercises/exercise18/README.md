@@ -401,219 +401,220 @@ kubectl rollout status deployment/sre-rollback-app
 # Expected output: "deployment "sre-rollback-app" successfully rolled out"
 ```
 
-### **Verify Deployment Health**
+## Verify Deployment Health and Accessibility
+
+Start by confirming that your application pod is up and running, and that the ConfigMap mounted correctly:
 
 ```bash
-# Check pod status
+# List pods for sre-rollback-app and verify a single pod is in Running state
 kubectl get pods -l app=sre-rollback-app
-# Should show 1 pod in "Running" state
 
-# Get detailed pod information
+# For more detail on where it’s running and its start time
 kubectl get pods -l app=sre-rollback-app -o wide
 
-# Check deployment details
+# Inspect the Deployment to see its replicas, conditions, and rollout status
 kubectl describe deployment sre-rollback-app
 
-# Verify ConfigMap was created
+# Make sure your v1 ConfigMap exists
 kubectl get configmap v1-content
 ```
 
-### **Test Service Accessibility**
+Next, open a local tunnel into your Service so you can exercise the application directly from your workstation:
 
 ```bash
-# Get service URL
-SERVICE_URL=$(minikube service sre-rollback-service --url)
-echo "Service URL: $SERVICE_URL"
+# Forward port 8081 on your machine to port 80 of the Kubernetes Service,
+# listening on all interfaces so you can curl or browse to it.
+kubectl port-forward svc/sre-rollback-service 8081:80 --address 0.0.0.0 &
 
-# Test the application
-curl -s $SERVICE_URL
-# Expected output: HTML page showing "Version 1.0 - Stable Release"
+# Define a variable for convenience
+SERVICE_URL=http://localhost:8081
 
-# Test with browser-friendly output
-curl -s $SERVICE_URL | grep -E "(Version|Status)" || echo "Service is responding with HTML content"
-
-# Or open in browser (macOS/Linux)
-open $SERVICE_URL  # macOS
-# or
-xdg-open $SERVICE_URL  # Linux
+# Print the URL you’ll use
+echo "Service is available at ${SERVICE_URL}"
 ```
 
-### **Verification Checklist**
-
-✅ Pod is in "Running" state  
-✅ Service responds with v1 HTML content  
-✅ ConfigMap is properly mounted  
-✅ No error events in cluster  
+With the tunnel in place, check for any recent errors and verify that nginx is serving your custom v1 page:
 
 ```bash
-# Check for any error events
+# Show the last few events in the cluster to confirm there are no errors
 kubectl get events --sort-by='.metadata.creationTimestamp' | tail -5
 
-# Verify nginx is serving the custom content
-curl -s $SERVICE_URL | head -10
+# Fetch the first ten lines of the HTML response to confirm Version 1.0 content
+curl -s "${SERVICE_URL}" | head -10
 ```
 
 ---
 
 ## Phase 3: Simulate Faulty v2 Release
 
-**Why?** Introduce a realistic production failure to practice incident response.
+In this phase, you’ll push the broken manifests from `v2`, observe the failure symptoms as Kubernetes tries and fails to pull the invalid image, and gather the key diagnostic outputs you’d use in a real incident.
 
-### **Deploy the Broken Version**
+First, apply the `v2` folder and attempt to monitor the rollout. You should see the command time out or report an error when Kubernetes can’t fetch the image:
 
 ```bash
-# Apply v2 manifests (includes the broken image)
+# Deploy the faulty version and watch for rollout failure
 kubectl apply -f v2/
 
-# Try to monitor deployment (this will likely hang or show errors)
-echo "Monitoring deployment progress (this will fail due to broken image)..."
-kubectl rollout status deployment/sre-rollback-app --timeout=60s || echo "❌ Deployment failed or timed out as expected"
+echo "Deploying v2 (expected to fail)..."
+kubectl rollout status deployment/sre-rollback-app --timeout=60s \
+  || echo "Deployment did not complete, as expected for the broken image"
 ```
 
-### **Analyze the Failure**
+Next, inspect the live failure in three parts:
 
-Open multiple terminal windows to monitor the failure:
+1. **Pod status over time**
+   Open a terminal and run:
 
-**Terminal 1 - Watch pods:**
+   ```bash
+   watch -n 2 'kubectl get pods -l app=sre-rollback-app'
+   ```
+
+   You will see one or more pods stuck in `ImagePullBackOff` or `ErrImagePull`.
+
+2. **Details on the failing pod**
+   In a second window, capture the name of the most recently created pod and describe it to view the image pull errors:
+
+   ```bash
+   FAILING_POD=$(kubectl get pods -l app=sre-rollback-app \
+     --sort-by='.metadata.creationTimestamp' \
+     -o jsonpath='{.items[-1].metadata.name}')
+
+   echo "Describing pod: $FAILING_POD"
+   kubectl describe pod "$FAILING_POD"
+
+   # Inspect related events for this pod
+   kubectl get events \
+     --field-selector involvedObject.name="$FAILING_POD" \
+     --sort-by='.metadata.creationTimestamp'
+   ```
+
+### Service availability check
+
+Open a shell (the same one where you ran the port-forward, or after you’ve exported the URL) and run:
+
 ```bash
-# Watch pod status in real-time
-watch -n 2 'kubectl get pods -l app=sre-rollback-app'
-# You should see pods in "ImagePullBackOff" or "ErrImagePull" state
-```
-
-**Terminal 2 - Check pod details:**
-```bash
-# Get the failing pod name
-FAILING_POD=$(kubectl get pods -l app=sre-rollback-app --sort-by='.metadata.creationTimestamp' -o jsonpath='{.items[-1].metadata.name}')
-echo "Checking details for pod: $FAILING_POD"
-
-# Describe the failing pod to see image pull errors
-kubectl describe pod $FAILING_POD
-
-# Check events for this specific pod
-kubectl get events --field-selector involvedObject.name=$FAILING_POD --sort-by='.metadata.creationTimestamp'
-```
-
-**Terminal 3 - Service status:**
-```bash
-# Test service availability (should still work from old pods if any exist)
-while true; do
-  response_code=$(curl -s -o /dev/null -w "%{http_code}" $SERVICE_URL 2>/dev/null || echo "000")
-  timestamp=$(date '+%H:%M:%S')
-  if [ "$response_code" = "200" ]; then
-    echo "[$timestamp] ✅ Service responding (HTTP $response_code)"
-  else
-    echo "[$timestamp] ❌ Service unavailable (HTTP $response_code)"
-  fi
-  sleep 3
+# Continuously probe the service every 3 seconds
+export SERVICE_URL="http://localhost:8081"
+while sleep 3; do
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL" || echo "000")
+  echo "$(date '+%H:%M:%S') → HTTP ${HTTP_CODE}"
 done
+
+# Sample output:
+# 10:07:54 → HTTP 200
+# 10:07:57 → HTTP 200
+# 10:08:00 → HTTP 200
+# …
 ```
 
-### **Gather Diagnostic Information**
+At each timestamp you should see HTTP 200. That confirms your v1 pod is healthy and serving traffic continuously—exactly the behavior you want before proceeding to simulate the faulty release.
+
+
+**What this does:**
+
+* Exports `SERVICE_URL` so it’s available in your loop.
+* Uses `curl` in silent mode to fetch only the HTTP status code.
+* Falls back to `000` if the connection fails.
+* Prints a timestamp plus the code, so you can see exactly when the service dropped or recovered.
+
+That way, you won’t run into a blank‐URL error, and you get a clear, time-stamped view of service availability as you trigger and roll back your v2 release.
+
+Finally, pull together cluster-wide diagnostics to confirm the root cause and scope of the failure:
 
 ```bash
-# Check deployment status and conditions
+# Review Deployment conditions and rollout history
 kubectl describe deployment sre-rollback-app
 
-# View recent events
+# Show the last ten events in the cluster
 kubectl get events --sort-by='.metadata.creationTimestamp' | tail -10
 
-# Check ReplicaSet history (you should see old and new ReplicaSets)
+# List ReplicaSets to see both v1 and the attempted v2 rollout
 kubectl get rs -l app=sre-rollback-app -o wide
 
-# Check rollout status
-kubectl rollout status deployment/sre-rollback-app --timeout=10s || echo "Rollout is stuck"
+# Check the rollout status one more time
+kubectl rollout status deployment/sre-rollback-app --timeout=10s \
+  || echo "Rollout remains incomplete"
 
-# See the problematic image that's causing the failure
-kubectl get deployment sre-rollback-app -o jsonpath='{.spec.template.spec.containers[0].image}'
-echo ""
+# Print the image reference that triggered the failure
+kubectl get deployment sre-rollback-app \
+  -o jsonpath='{.spec.template.spec.containers[0].image}'; echo
 ```
 
-**Expected Failure Symptoms:**
-- Pods in `ImagePullBackOff` or `ErrImagePull` state
-- Error events showing "Failed to pull image" or "repository does not exist"
-- Service may still respond if old pods haven't been terminated yet
-- Deployment shows "1 unavailable" replica
+By now you will have observed pods repeatedly failing to pull the broken image, seen error events like “Error: ImagePullBackOff” or “Back-off pulling image "nginx:broken-v2-tag” and noted that your deployment reports one unavailable replica.
+
+With that context, you’re ready to execute an emergency rollback in Phase 4.
 
 ---
 
-## Phase 4: Kubernetes Native Rollback
+## Phase 4: Kubernetes–Native Rollback
 
-**Why?** Use Kubernetes built-in recovery mechanisms for immediate response.
-
-### **Execute Emergency Rollback**
+When you applied the faulty v2 manifests, Kubernetes began spinning up new pods that immediately entered `ImagePullBackOff`. Because the rolling-update strategy keeps old pods alive until new ones become Ready, your service at `http://localhost:8081` may continue to return HTTP 200 even though no healthy v2 replicas exist. To reconcile your Deployment’s desired state and remove the broken ReplicaSet, perform a native rollback.
 
 ```bash
-# EMERGENCY ROLLBACK - Execute immediately!
-echo "EXECUTING EMERGENCY ROLLBACK"
-
-# Rollback to previous revision
+# Trigger the rollback to the last-known-good revision
+echo "Rolling back to v1..."
 kubectl rollout undo deployment/sre-rollback-app
 
-# Monitor rollback progress
+# Wait (up to 3 minutes) for the rollout to complete
 kubectl rollout status deployment/sre-rollback-app --timeout=180s
-# Expected output: "deployment "sre-rollback-app" successfully rolled out"
 ```
 
-### **Monitor Rollback Progress**
+Once you see the “successfully rolled out” message, confirm that Kubernetes has torn down the failing v2 pods and brought up fresh v1 pods. In one shell, run:
 
-**Terminal 1 - Watch rollback:**
 ```bash
-# Monitor deployment status in real-time
 watch -n 2 'kubectl get pods -l app=sre-rollback-app'
-# Should see new pods starting and old broken pods terminating
 ```
 
-**Terminal 2 - Service availability:**
+You should observe the old v2 pods disappearing and new v1 pods entering the Running state.
+
+Meanwhile, in another shell, verify that your application is serving the correct v1 content and health status:
+
 ```bash
-# Monitor service recovery
-echo "Monitoring service recovery..."
-for i in {1..10}; do
-  response=$(curl -s $SERVICE_URL 2>/dev/null | grep -o "Version [0-9.]*" || echo "Service unavailable")
-  timestamp=$(date '+%H:%M:%S')
-  echo "[$timestamp] Test $i: $response"
+export SERVICE_URL="http://localhost:8081"
+
+for attempt in $(seq 1 10); do
+  TS=$(date '+%H:%M:%S')
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL" || echo "000")
+  VERSION=$(curl -s "$SERVICE_URL" | grep -oE "Version [0-9.]*" || echo "no version tag")
+  STATUS=$(curl -s "$SERVICE_URL" | grep -oE "Status: [A-Za-z ]*"   || echo "no status tag")
+  echo "[$TS] HTTP $HTTP_CODE — ${VERSION} | ${STATUS}"
   sleep 2
 done
+
+# Sample output:
+# [10:45:00] HTTP 200 — Version 1.0 | Status: Healthy and Running
+# [10:45:02] HTTP 200 — Version 1.0 | Status: Healthy and Running
 ```
 
-### **Verify Successful Recovery**
+Seeing HTTP 200 alongside “Version 1.0” and “Status: Healthy and Running” confirms that the rollback succeeded: the broken v2 pods are gone, the Deployment spec has reverted to nginx:1.21-alpine, and your service is serving the expected content.
+
+Finally, perform a brief audit to ensure everything matches v1:
 
 ```bash
-# Check pod status
+# List pods and verify they all use the v1 image
 kubectl get pods -l app=sre-rollback-app -o wide
-# Should show healthy pods running nginx:1.21-alpine
 
-# Verify service response
-curl -s $SERVICE_URL | grep -E "(Version|Status)" || echo "HTML content restored"
+# Describe the Deployment to inspect its current conditions
+kubectl describe deployment sre-rollback-app
 
-# Test direct health check (nginx root path)
-curl -I $SERVICE_URL
-# Should return HTTP 200
+# Confirm the live container image is nginx:1.21-alpine
+kubectl get deployment sre-rollback-app \
+  -o jsonpath='{.spec.template.spec.containers[0].image}'; echo
 
-# Check deployment health
-kubectl describe deployment sre-rollback-app | grep -A 5 "Conditions"
-
-# Verify we're back to the working image
-kubectl get deployment sre-rollback-app -o jsonpath='{.spec.template.spec.containers[0].image}'
-echo ""
-```
-
-### **Review Rollback History**
-
-```bash
-# View rollout history
+# Review rollout history
 kubectl rollout history deployment/sre-rollback-app
-# Shows: revision 1 (v1), revision 2 (broken v2), revision 3 (rollback to v1)
 
-# Get details about current revision
+# Inspect a specific revision by number, e.g. revision 3 or 4:
 kubectl rollout history deployment/sre-rollback-app --revision=3
 
-# Check which ConfigMap is active
-kubectl get deployment sre-rollback-app -o yaml | grep -A 5 "configMap"
+# Verify that only the v1 ConfigMap is actively mounted
+kubectl get deployment sre-rollback-app -o yaml | grep -A4 "configMap:"
 
-# Verify ConfigMap cleanup (v2-content might still exist but not be used)
+# List all ConfigMaps to confirm v2-content remains but is unused
 kubectl get configmaps
 ```
+
+At this stage, your cluster state, service behavior, and rollout history all reflect the stable v1 release. You’re now ready to proceed to Phase 5 for a GitOps-driven rollback using ArgoCD.
 
 ---
 
@@ -760,44 +761,20 @@ pkill -f "kubectl port-forward svc/argocd-server" 2>/dev/null || true
 
 ## Expected Outcome
 
-**Congratulations!** You have successfully:
+By completing this exercise, you will have installed and configured versioned manifests for stability testing, simulated realistic production failures with broken container images, practiced native rollback with kubectl, and embraced GitOps rollbacks through ArgoCD. You’ll have observed rollout history, service availability, and configuration drift from both CLI and UI perspectives.
 
-* **Deployed & validated** a stable v1 release using nginx with custom content and comprehensive health checks
-* **Simulated a realistic production failure** with v2 using a non-existent image tag and analyzed failure symptoms  
-* **Recovered instantly** using `kubectl rollout undo` with real-time monitoring of the recovery process
-* **Performed GitOps-based rollback** via ArgoCD using multiple methods (UI, CLI, and declarative patching)
-* **Explored rollout history** and gained audit trail visibility across both imperative and declarative approaches
-* **Monitored service availability** throughout the incident lifecycle without requiring custom Docker images
+These skills reinforce core SRE capabilities:
 
-### **Key Skills Developed:**
-
-- **Incident Response**: Quick diagnosis and recovery under pressure using standard container images
-- **Tool Proficiency**: Both imperative (kubectl) and declarative (ArgoCD) approaches to rollback management
-- **Monitoring**: Real-time observability during deployment operations and failure scenarios
-- **GitOps Workflows**: Version-controlled infrastructure management with proper audit trails
-- **Troubleshooting**: Image pull error analysis, event inspection, and systematic failure diagnosis
-- **Production Readiness**: Using reliable, public images to simulate real-world deployment scenarios
-
-### **What You Learned About Rollback Patterns:**
-
-- **ImagePullBackOff errors** are common production failures that require immediate rollback
-- **Multiple recovery paths** provide flexibility during incidents (kubectl vs ArgoCD vs Git-based)
-- **Health checks and monitoring** are essential for detecting and validating recovery
-- **Rollout history** provides complete audit trails for post-incident analysis
-- **GitOps patterns** ensure all changes are tracked and recoverable through Git
+– Rapid incident response using automated rollback patterns.
+– Declarative infrastructure management with audit trails.
+– Real-time observability during deployment and recovery.
+– Scripting against Kubernetes without manual tunnels or background processes.
 
 ---
 
 ## Next Steps
 
-In **[Exercise 19](../exercise19)**, you'll take your rollback skills to the next level by:
-
-- **Introducing controlled failures** with Chaos Engineering tools like Chaos Monkey and Litmus
-- **Validating rollback procedures** under various stress conditions including network partitions and resource exhaustion
-- **Testing system resilience** with pod kills, network latency, CPU spikes, and memory pressure
-- **Building confidence** that your recovery workflows handle real-world disruptions beyond simple image failures
-- **Automating chaos experiments** to continuously validate system reliability and rollback effectiveness
-- **Measuring MTTR improvements** through systematic chaos testing and rollback optimization
+In **[Exercise 19](../exercise19)**, we will move beyond simple image failures and into the unpredictable world of Chaos Engineering. You'll use tools like Chaos Monkey and Litmus to introduce controlled failures, simulating real-world disruptions such as network partitions, CPU spikes, and memory pressure. By validating your rollback procedures under these stressful conditions, you'll gain confidence that your recovery workflows can handle any type of failure. This systematic approach to testing system resilience will not only expose weaknesses but also allow you to continuously improve your processes. The ultimate goal is to automate these chaos experiments and measure improvements in your Mean Time to Recovery (MTTR), ensuring your systems are resilient and your team is prepared for anything.
 
 The rollback skills you've mastered here will be essential when chaos engineering exposes weaknesses in your systems - you'll know exactly how to recover quickly and safely from any type of failure!
 
