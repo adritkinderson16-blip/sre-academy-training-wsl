@@ -824,6 +824,7 @@ argocd app get sre-rollback-app
 
 # 2. Verify pods are using the stable image
 kubectl get pods -l app=sre-rollback-app -o wide
+```
 
 With these steps, you’ll have fully reverted to the stable v1 release in ArgoCD, validated the rollout, and confirmed your service is serving the expected content.
 
