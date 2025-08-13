@@ -2,42 +2,37 @@
 
 ## Overview
 
-This guide will help you install the required tools to complete all exercises in the SRE Academy (Exercises 1–19).
-The setup is different depending on your operating system.
+This guide will walk you through installing all the required tools for **Exercises 1–19** in the SRE Academy.
+Setup steps differ depending on your operating system.
 
 ---
 
-## What You Will Install
+## Tools You Will Install
 
-| Tool                        | Purpose                                   |
-| --------------------------- | ----------------------------------------- |
-| Python 3                    | Used to run the initial Flask application |
-| pip / venv                  | To manage Python packages                 |
-| Docker (via Colima or WSL2) | To build and run containers               |
-| Minikube                    | To run a local Kubernetes cluster         |
-| kubectl                     | To manage Kubernetes resources            |
-| Homebrew (macOS)            | To install CLI tools                      |
-| pipx + Ansible              | For Infrastructure as Code (Exercise 4.1) |
+| Tool                    | Purpose                                       |
+| ----------------------- | --------------------------------------------- |
+| Python 3                | Runs the initial Flask application            |
+| pip / venv              | Manages Python packages                       |
+| Docker (Colima or WSL2) | Builds and runs containers                    |
+| Minikube                | Runs a local Kubernetes cluster               |
+| kubectl                 | Manages Kubernetes resources                  |
+| Homebrew (macOS only)   | Installs CLI tools                            |
+| pipx + Ansible          | Infrastructure as Code (Exercise 4.1 onwards) |
 
 ---
 
-## For macOS Users
+## macOS Users
 
-All macOS users (especially IBM-managed devices) must use **Colima** instead of Docker Desktop.
+All macOS users (especially IBM-managed devices) **must use Colima** instead of Docker Desktop.
 
-### Step 1: Install Homebrew
+### Step 1 – Install Homebrew
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-Verify installation:
-
-```bash
 brew --version
 ```
 
-### Step 2: Install Required Tools
+### Step 2 – Install Required Tools
 
 ```bash
 brew install python
@@ -47,100 +42,137 @@ brew install minikube
 brew install kubectl
 ```
 
+### Step 3 – Start Colima
+
+```bash
+colima start --cpu 4 --memory 6 --disk 60
+docker version
+```
+
 ---
 
-## For Windows Users
+## Windows Users (WSL2 + Ubuntu)
 
-You must install **WSL2 (Windows Subsystem for Linux)** and use **Ubuntu** as your Linux distribution.
+You must install **WSL2** and use **Ubuntu** as your Linux distribution.
+We will install **Docker Engine** (official repo), **Minikube**, and **kubectl**.
 
-### Step 1: Enable WSL2
+### Step 1 – Enable WSL2
 
-Open PowerShell **as Administrator** and run:
+Open **PowerShell as Administrator** and run:
 
 ```powershell
 wsl --install
 ```
 
-Then restart your computer. This installs:
-
-* WSL2
-* Ubuntu (default distribution)
-* Required kernel updates
-
-> If needed: [WSL Official Setup Guide](https://learn.microsoft.com/en-us/windows/wsl/install)
+Restart your computer.
 
 ---
 
-### Step 2: Open Ubuntu and Update System
+### Step 2 – Enable systemd in WSL2
 
-After reboot, open Ubuntu and run:
+This is required for Docker to run as a service inside WSL2.
+
+In Ubuntu:
 
 ```bash
-sudo apt update && sudo apt upgrade -y
+sudo nano /etc/wsl.conf
 ```
 
----
+Add:
 
-### Step 3: Install Required Tools in Ubuntu
-
-```bash
-sudo apt install -y python3 python3-pip python3-venv
-sudo apt install -y docker.io
-sudo apt install -y minikube
-sudo apt install -y kubectl
+```
+[boot]
+systemd=true
 ```
 
+Back in PowerShell (Windows):
+
+```powershell
+wsl --shutdown
+```
+
+Reopen Ubuntu.
+
 ---
 
-### Step 4: Add Your User to Docker Group
-
-To avoid `sudo` when using Docker:
+### Step 3 – Install Docker Engine (Official Repo)
 
 ```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg
+
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
 sudo usermod -aG docker $USER
 newgrp docker
+sudo systemctl enable --now docker
+docker version
 ```
 
 ---
 
-## Install pipx and Ansible
-
-> Starting from Exercise 4.1, we will use `pipx` to install Ansible in an isolated environment.
-
-### On macOS
+### Step 4 – Install kubectl (Official Repo)
 
 ```bash
-brew install pipx
-pipx ensurepath
+sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg \
+  https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key
 
-pipx install --include-deps ansible
-pipx upgrade --include-injected ansible
-pipx inject --include-apps ansible argcomplete
+echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] \
+  https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /" \
+  | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+sudo apt-get update
+sudo apt-get install -y kubectl
+kubectl version --client
 ```
 
-### On WSL2 (Ubuntu)
+---
+
+### Step 5 – Install Minikube (Official Binary)
 
 ```bash
-sudo apt update
-sudo apt install -y pipx python3-venv
-pipx ensurepath
-
-pipx install --include-deps ansible
-pipx upgrade --include-injected ansible
-pipx inject --include-apps ansible argcomplete
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
+minikube version
 ```
 
-Verify installation:
+---
+
+### Step 6 – Install Python, pip, venv, pipx, and Ansible
 
 ```bash
+sudo apt-get install -y python3 python3-pip python3-venv pipx
+pipx ensurepath
+pipx install --include-deps ansible
 ansible --version
 ```
 
 ---
 
-## After Installation
+## Starting Minikube
 
-Once all tools are installed, verify:
+On both macOS and Windows/WSL2:
+
+```bash
+minikube start --driver=docker
+kubectl get nodes
+```
+
+---
+
+## Verification
+
+Run these commands to ensure all tools are working:
 
 ```bash
 python3 --version
@@ -151,15 +183,13 @@ kubectl version --client
 ansible --version
 ```
 
-If any command fails, resolve it **before** attending the first class.
-
 ---
 
 ## Final Notes
 
-* **macOS users** will use `colima` to simulate a Docker environment.
-* **Windows users** will use `WSL2 + Ubuntu + Docker` to follow the same instructions.
-* All commands in this academy assume the **Docker runtime** (`--driver=docker`) for Minikube.
-* You are now ready to begin **Exercise 1**.
+* **macOS users** use `colima` to simulate a Docker environment.
+* **Windows users** use `WSL2 + Ubuntu + Docker Engine`.
+* All Minikube commands use the **Docker driver** (`--driver=docker`).
+* You are now ready to start **Exercise 1**.
 
 ---
