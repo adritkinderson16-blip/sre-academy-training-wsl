@@ -2,60 +2,62 @@
 
 ## Table of Contents
 
-- [Scenario: Production Under Stress](#scenario-production-under-stress)
-- [Why Chaos Engineering Matters for SRE](#why-chaos-engineering-matters-for-sre)
-- [Learning Objectives](#learning-objectives)
-- [Prerequisites and GitHub Repo Setup](#prerequisites-and-github-repo-setup)
-- [Phase 1: Deploy Target Application](#phase-1-deploy-target-application)
-- [Phase 2: Install and Configure LitmusChaos](#phase-2-install-and-configure-litmuschaos)
-- [Phase 3: Basic Chaos Experiments](#phase-3-basic-chaos-experiments)
-- [Phase 4: Rollback Under Chaos](#phase-4-rollback-under-chaos)
-- [Phase 5: Advanced Chaos Scenarios](#phase-5-advanced-chaos-scenarios)
-- [Phase 6: Measuring Chaos Impact](#phase-6-measuring-chaos-impact)
-- [Cleanup](#cleanup)
+  - [Scenario: Production Under Stress](https://www.google.com/search?q=%23scenario-production-under-stress)
+  - [Why Chaos Engineering Matters for SRE](https://www.google.com/search?q=%23why-chaos-engineering-matters-for-sre)
+  - [Learning Objectives](https://www.google.com/search?q=%23learning-objectives)
+  - [Prerequisites and GitHub Repo Setup](https://www.google.com/search?q=%23prerequisites-and-github-repo-setup)
+  - [Phase 1: Deploy Target Application](https://www.google.com/search?q=%23phase-1-deploy-target-application)
+  - [Phase 2: Install and Configure LitmusChaos](https://www.google.com/search?q=%23phase-2-install-and-configure-litmuschaos)
+  - [Phase 3: Basic Chaos Experiments (Cloud-Native)](https://www.google.com/search?q=%23phase-3-basic-chaos-experiments-cloud-native)
+  - [Phase 4: Rollback Under Chaos](https://www.google.com/search?q=%23phase-4-rollback-under-chaos)
+  - [Phase 5: Automated Stress Testing](https://www.google.com/search?q=%23phase-5-automated-stress-testing)
+  - [Phase 6: Measuring Chaos Impact](https://www.google.com/search?q=%23phase-6-measuring-chaos-impact)
+  - [Cleanup](https://www.google.com/search?q=%23cleanup)
 
----
+-----
 
 ## Scenario: Production Under Stress
 
-It's Black Friday, and your e-commerce platform is under immense pressure, with traffic ten times higher than normal. To make matters worse, you need to deploy a critical security patch right in the middle of this surge. However, your production environment isn't behaving as expected. You're seeing network latency spikes disrupting service communication, memory pressure causing pods to unexpectedly restart, CPU throttling on some nodes, and intermittent monitoring connectivity issues.
+It's Black Friday, and your e-commerce platform is under immense pressure, with traffic ten times higher than normal. To make matters worse, you need to deploy a critical security patch right in the middle of this surge. However, your production environment isn't behaving as expected. You're seeing network latency spikes disrupting service communication and pods unexpectedly restarting.
 
 As the SRE on call, you have a critical mission. First, you must **deploy the security patch** despite the unstable environment. You also need to be prepared to **safely roll back** if the deployment fails, all while **maintaining service availability** for your customers. Throughout this process, you must also **measure the impact** of these challenging conditions on your recovery procedures. The ultimate question is this: Will your deployment and rollback procedures work when production is already under so much stress?
 
----
+-----
 
 ## Why Chaos Engineering Matters for SRE
 
-In previous exercises, you mastered deployment automation, GitOps practices, and rollback procedures under **controlled and ideal conditions**. But real-world production environments are rarely ideal. This is where **Chaos Engineering** comes in. By intentionally injecting controlled failures, Chaos Engineering helps SREs validate their assumptions about how a system behaves under pressure. It's a proactive way to discover weaknesses before they lead to real outages. This practice builds confidence in your recovery procedures, allowing you to measure the true Mean Time to Recovery (MTTR) under realistic failure conditions and ultimately improve your system design based on observed failure modes. Through these experiments, you can answer critical questions, like whether your rollback procedure works when pods are crashing or how network latency impacts deployment times.
+In previous exercises, you mastered deployment automation and rollback procedures under **controlled and ideal conditions**. But real-world production environments are rarely ideal. This is where **Chaos Engineering** comes in. By intentionally injecting controlled failures, Chaos Engineering helps SREs validate their assumptions about how a system behaves under pressure. It's a proactive way to discover weaknesses before they lead to real outages. This practice builds confidence in your recovery procedures, allowing you to measure the true Mean Time to Recovery (MTTR) under realistic failure conditions.
 
----
+-----
 
 ## Learning Objectives
 
-By completing this exercise, you will gain practical experience with Chaos Engineering. You'll begin by **installing and configuring LitmusChaos** for your Kubernetes environment. From there, you will **design chaos experiments** to simulate realistic production failures and then **execute rollback procedures** under these stressful conditions. You'll learn to **measure and compare MTTR** between normal and chaotic scenarios and **analyze system behavior** as you inject failures. This process will help you build confidence in your deployment and recovery capabilities while applying the core SRE principle of proactive reliability testing.
+By completing this exercise, you will gain practical experience with Cloud-Native Chaos Engineering. You'll begin by **installing LitmusChaos** in your Kubernetes environment. From there, you will **define chaos experiments as code (YAML)** using `ChaosEngine` CRDs—the professional standard for SREs. You will then **execute automated rollbacks** while the Chaos Operator actively attacks your cluster. Finally, you will **measure MTTR** to quantify how instability affects your ability to recover.
 
----
+-----
 
 ## Prerequisites and GitHub Repo Setup
 
 ### **Prerequisites**
 
-- A running Kubernetes cluster (Minikube)
-- `kubectl` configured and working  
-- Basic understanding of Kubernetes deployments and services
-- Familiarity with deployment and rollback concepts
+  - A running Kubernetes cluster (Minikube)
+  - `kubectl` configured and working
+  - Python 3 installed
+  - Basic understanding of Kubernetes deployments
 
 ### **Create Your GitHub Repository**
 
-1. **Create a new repository**:
+1.  **Create a new repository**:
 
-   - Visit [https://github.com/new](https://github.com/new)
-   - Repository name: `sre-chaos-engineering`
-   - Visibility: Public
-   - Leave "Initialize with README" unchecked  
-   - Click **Create repository**
+      - Visit [https://github.com/new](https://github.com/new)
+      - Repository name: `sre-chaos-engineering`
+      - Visibility: Public
+      - Leave "Initialize with README" unchecked
+      - Click **Create repository**
 
-2. **Initialize locally**:
+2.  **Initialize locally**:
+
+<!-- end list -->
 
 ```bash
 mkdir -p ~/Projects/sre-chaos-engineering
@@ -64,17 +66,21 @@ git init
 git branch -M main
 ```
 
-3. **Link to remote** (replace YOUR-USERNAME):
+3.  **Link to remote** (replace YOUR-USERNAME):
+
+<!-- end list -->
 
 ```bash
 git remote add origin https://github.com/YOUR-USERNAME/sre-chaos-engineering.git
 ```
 
-4. **Create initial structure**:
+4.  **Create initial structure**:
+
+<!-- end list -->
 
 ```bash
 # Create directory structure
-mkdir -p manifests/stable manifests/unstable scripts
+mkdir -p manifests/stable manifests/unstable manifests/chaos scripts
 
 # Create initial README
 echo "# SRE Chaos Engineering Lab" > README.md
@@ -85,7 +91,7 @@ git commit -m "Initial commit: chaos engineering lab setup"
 git push -u origin main
 ```
 
----
+-----
 
 ## Phase 1: Deploy Target Application
 
@@ -119,7 +125,6 @@ spec:
         image: nginx:1.21-alpine
         ports:
         - containerPort: 80
-        # Resource limits for realistic testing
         resources:
           requests:
             memory: "64Mi"
@@ -127,7 +132,6 @@ spec:
           limits:
             memory: "128Mi"
             cpu: "100m"
-        # Health checks
         livenessProbe:
           httpGet:
             path: /
@@ -140,7 +144,6 @@ spec:
             port: 80
           initialDelaySeconds: 5
           periodSeconds: 5
-        # Mount custom content
         volumeMounts:
         - name: content
           mountPath: /usr/share/nginx/html/index.html
@@ -183,20 +186,13 @@ data:
         <style>
             body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #e8f5e8; }
             .status { color: #2d5a3d; font-size: 1.5em; margin: 20px 0; }
-            .info { background: #d4edda; padding: 15px; border-radius: 5px; display: inline-block; }
         </style>
     </head>
     <body>
         <h1>Chaos Engineering Target Application</h1>
         <div class="status">Status: STABLE</div>
-        <div class="info">
-            <strong>Version:</strong> 1.0-stable<br>
-            <strong>Purpose:</strong> Testing resilience under chaos<br>
-            <strong>Timestamp:</strong> <span id="time"></span>
-        </div>
-        <script>
-            document.getElementById('time').textContent = new Date().toLocaleString();
-        </script>
+        <p>Timestamp: <span id="time"></span></p>
+        <script>document.getElementById('time').textContent = new Date().toLocaleString();</script>
     </body>
     </html>
 EOF
@@ -230,25 +226,12 @@ spec:
         image: nginx:nonexistent-tag  # This will cause ImagePullBackOff
         ports:
         - containerPort: 80
-        resources:
-          requests:
-            memory: "64Mi"
-            cpu: "50m"
-          limits:
-            memory: "128Mi"
-            cpu: "100m"
         livenessProbe:
           httpGet:
             path: /
             port: 80
           initialDelaySeconds: 10
           periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 5
-          periodSeconds: 5
         volumeMounts:
         - name: content
           mountPath: /usr/share/nginx/html/index.html
@@ -274,20 +257,9 @@ data:
     <html>
     <head>
         <title>Chaos Engineering Target - UNSTABLE</title>
-        <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #ffe6e6; }
-            .status { color: #d63384; font-size: 1.5em; margin: 20px 0; }
-            .info { background: #f8d7da; padding: 15px; border-radius: 5px; display: inline-block; }
-        </style>
     </head>
     <body>
         <h1>Chaos Engineering Target - BROKEN</h1>
-        <div class="status">Status: UNSTABLE</div>
-        <div class="info">
-            <strong>Version:</strong> 2.0-unstable<br>
-            <strong>Issue:</strong> Image pull failure<br>
-            <strong>Action:</strong> Should rollback immediately
-        </div>
     </body>
     </html>
 EOF
@@ -298,254 +270,172 @@ EOF
 ```bash
 # Deploy stable version
 kubectl apply -f manifests/stable/
-```
-
-```bash
-# Wait for deployment
 kubectl rollout status deployment/chaos-target-app
 ```
 
-```bash
-# Verify pods are running
-kubectl get pods -l app=chaos-target-app
-```
-
-```bash
-# Test the service
-kubectl port-forward svc/chaos-target-service 8080:80 --address 0.0.0.0 &
-SERVICE_PID=$!
-```
-
-```bash
-# Test in browser
-http://localhost:8080
-```
-
-```bash
-# Test in terminal
-curl http://localhost:8080
-```
-
----
+-----
 
 ## Phase 2: Install and Configure LitmusChaos
 
-In this phase, you'll install LitmusChaos, a popular open-source Chaos Engineering framework for Kubernetes. LitmusChaos lets you inject faults like pod failures, memory pressure, and network latency to simulate real-world outages. You’ll deploy its operator and define the experiments needed to stress your application in a controlled, measurable way.
+In this phase, you'll install LitmusChaos, a popular open-source Chaos Engineering framework for Kubernetes. Unlike manual scripting, Litmus allows you to manage chaos using Kubernetes manifests.
 
 ### Step 1: Install LitmusChaos Operator
 
 ```bash
 # Create dedicated namespace
 kubectl create namespace litmus
-```
 
-```bash
 # Install LitmusChaos operator
 kubectl apply -f https://litmuschaos.github.io/litmus/litmus-operator-v3.0.0.yaml -n litmus
-```
 
-```bash
 # Wait for installation to complete
 echo "Waiting for LitmusChaos operator to be ready..."
 kubectl wait --for=condition=Ready pods --all -n litmus --timeout=300s
 ```
 
-```bash
-# Verify installation
-kubectl get pods -n litmus
-kubectl get crds | grep chaos
-```
+### Step 2: Setup Chaos Permissions (RBAC)
 
----
-
-## Phase 3: Basic Chaos Experiments
-
-This phase introduces **three chaos scenarios**: pod deletion, simulated memory pressure, and simulated network latency. Each is designed to help you observe system behavior under failure using **real-time monitoring** and a **controlled chaos injection script**.
-
-You’ll use **two terminals**:
-
-* **Terminal 1**: Monitors app availability (simulates users accessing the service)
-* **Terminal 2**: Runs chaos scripts (simulates system failures)
-
----
-
-### Step 1: Pod Deletion Chaos
-
-In this experiment, we simulate pod crashes by force-deleting pods.
-
----
-
-#### Terminal 1 — Monitor App in Real Time
-
-Run this in **Terminal 1** to continuously test the app’s availability:
+Litmus needs permission to modify your application pods (delete them, stress them, etc.). We will create a ServiceAccount for this.
 
 ```bash
-echo "Testing service availability during pod deletion:"
-for i in {1..20}; do
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
-  echo "$(date '+%H:%M:%S') - HTTP $STATUS"
-  sleep 3
-done
-```
-
-**What to expect:**
-
-* Mostly `HTTP 200` responses
-* Occasional `HTTP 000` indicates temporary disruption while a pod is being recreated
-
+cat > manifests/chaos/rbac.yaml <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pod-delete-sa
+  namespace: default
+  labels:
+    name: pod-delete-sa
+    app.kubernetes.io/part-of: litmus
 ---
-
-#### Terminal 2 — Run Chaos Script
-
-Open a **second terminal** and run:
-
-```bash
-cat > scripts/manual-pod-chaos.sh <<'EOF'
-#!/bin/bash
-echo "=== Manual Pod Deletion Chaos ==="
-echo "Deleting one pod every 15 seconds (4 rounds)"
-echo "Starting chaos at: $(date)"
-echo ""
-
-for i in {1..4}; do
-  PODS=($(kubectl get pods -l app=chaos-target-app -o jsonpath='{.items[*].metadata.name}'))
-  POD_TO_DELETE=${PODS[0]}
-  
-  echo "[$(date '+%H:%M:%S')] Round $i: Deleting pod $POD_TO_DELETE"
-  kubectl delete pod "$POD_TO_DELETE" --grace-period=0
-  
-  sleep 15
-done
-
-echo "Chaos completed at: $(date)"
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-delete-sa
+  namespace: default
+  labels:
+    name: pod-delete-sa
+    app.kubernetes.io/part-of: litmus
+rules:
+- apiGroups: ["", "apps", "batch", "litmuschaos.io"]
+  resources: ["pods", "deployments", "pods/log", "events", "jobs", "chaosengines", "chaosexperiments", "chaosresults"]
+  verbs: ["create", "list", "get", "patch", "update", "delete", "deletecollection"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-delete-sa
+  namespace: default
+  labels:
+    name: pod-delete-sa
+    app.kubernetes.io/part-of: litmus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pod-delete-sa
+subjects:
+- kind: ServiceAccount
+  name: pod-delete-sa
+  namespace: default
 EOF
 
-chmod +x scripts/manual-pod-chaos.sh
-./scripts/manual-pod-chaos.sh
+kubectl apply -f manifests/chaos/rbac.yaml
+```
+
+-----
+
+## Phase 3: Basic Chaos Experiments (Cloud-Native)
+
+Instead of running manual scripts, we will use **Litmus Custom Resource Definitions (CRDs)**. You will define the chaos you want as YAML, and the operator will execute it.
+
+### Step 1: Install the Experiment Definition
+
+We need to pull the logic for "Pod Deletion" from the public ChaosHub.
+
+```bash
+kubectl apply -f https://hub.litmuschaos.io/api/chaos/master?file=charts/generic/pod-delete/experiment.yaml
+```
+
+### Step 2: Define the Chaos Engine
+
+The `ChaosEngine` connects the experiment to your specific application.
+
+```bash
+cat > manifests/chaos/engine-pod-delete.yaml <<EOF
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: nginx-chaos
+  namespace: default
+spec:
+  appinfo:
+    appns: 'default'
+    applabel: 'app=chaos-target-app'
+    appkind: 'deployment'
+  jobCleanUpPolicy: 'delete'
+  engineState: 'active'
+  chaosServiceAccount: pod-delete-sa
+  experiments:
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            # Kill one pod every 10 seconds for 60 seconds
+            - name: TOTAL_CHAOS_DURATION
+              value: '60'
+            - name: CHAOS_INTERVAL
+              value: '10'
+            - name: FORCE
+              value: 'true'
+EOF
+```
+
+### Step 3: Execute and Observe
+
+Open two terminals to see Cloud-Native chaos in action.
+
+**Terminal 1 (Observation):**
+
+```bash
+watch kubectl get pods
+```
+
+**Terminal 2 (Action):**
+
+```bash
+kubectl apply -f manifests/chaos/engine-pod-delete.yaml
 ```
 
 **What to observe:**
 
-* Pods go from `Running` → `Terminating` → disappear → new pods appear as `Pending` or `ContainerCreating`
-* Total pod count stays at 3
-* Terminal 1 shows real-time impact on service availability
+1.  A `nginx-chaos-runner` pod appears.
+2.  Every 10 seconds, one of your application pods is deleted.
+3.  Kubernetes automatically recreates the pod (Self-Healing).
 
----
-
-### Step 2: Simulated Memory Pressure
-
-We simulate a memory-stressed crash by deleting a pod while under simulated load.
-
----
-
-#### Terminal 1 — Monitor App Availability
-
-Run in **Terminal 1**:
+When finished observing, stop the experiment:
 
 ```bash
-echo "Testing service availability during simulated memory pressure:"
-for i in {1..20}; do
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
-  echo "$(date '+%H:%M:%S') - HTTP $STATUS"
-  sleep 3
-done
+kubectl delete -f manifests/chaos/engine-pod-delete.yaml
 ```
 
----
+### 💡 SRE Analysis: What just happened?
 
-#### Terminal 2 — Run Memory Chaos (Simulated)
+**The Technical Event:**
+You didn't write a script to delete pods. You created a Kubernetes Object (a `ChaosEngine`) that *declared* your intent: "I want pods to die every 10 seconds." The Litmus Operator saw this request and spun up a runner pod to execute that logic for you.
 
-Run in **Terminal 2**:
+**The Learning Outcome:**
+This teaches you **Declarative Chaos**. In the past, sysadmins would SSH into servers and run commands to break things (Imperative). In Modern SRE, we manage chaos exactly like we manage deployments: using YAML manifests. This makes chaos reproducible, version-controlled, and auditable.
 
-```bash
-echo "Simulating memory pressure by deleting a pod..."
-POD=$(kubectl get pods -l app=chaos-target-app -o jsonpath='{.items[0].metadata.name}')
-kubectl delete pod "$POD" --grace-period=0
-```
+**Real Production Value:**
+In a real company, you wouldn't run this manually. You would commit this YAML to a Git repository. A CI/CD pipeline could then automatically apply this "Chaos Configuration" to a staging environment every Tuesday, ensuring your system is *continuously* tested for resilience without human intervention.
 
-Wait 60 seconds:
-
-```bash
-sleep 60
-```
-
-Then confirm recovery:
-
-```bash
-kubectl get pods -l app=chaos-target-app
-```
-
-**What to observe:**
-
-* One pod is terminated, and a replacement pod is created
-* Terminal 1 may show `HTTP 000` if the app momentarily becomes unavailable
-
-This mirrors what would happen if a pod exceeded memory limits and was killed by the kernel.
-
----
-
-### Step 3: Simulated Network Latency
-
-We simulate high-latency behavior by intentionally delaying client requests. This helps visualize degraded user experience without requiring kernel-level tools.
-
----
-
-#### Terminal 1 — Send Baseline Requests
-
-```bash
-echo "Baseline response times:"
-for i in {1..5}; do
-  curl -w "Attempt $i - Time: %{time_total}s\n" -o /dev/null -s http://localhost:8080
-  sleep 2
-done
-```
-
-You should see response times under 0.1 seconds.
-
----
-
-#### Terminal 2 — Inject Artificial Delay (Simulated Latency)
-
-Now simulate client-side latency by adding artificial `sleep` to the request loop:
-
-```bash
-echo "Simulating client-side delay to mimic network latency:"
-for i in {1..5}; do
-  curl -w "Attempt $i - Time: %{time_total}s\n" -o /dev/null -s http://localhost:8080
-  sleep 3
-done
-```
-
-You won’t see real impact on pods, but this helps students visualize **how network degradation affects user-perceived latency**.
-
-> Optional: Pair this with a system monitoring tool like `htop`, `kubectl top pods`, or a Prometheus+Grafana setup to visualize resource trends under chaos.
-
----
-
-## Summary of Expected Behavior
-
-| Scenario               | Terminal 1 Output                                 | Terminal 2 Action                    | Kubernetes Behavior                                 |
-| ---------------------- | ------------------------------------------------- | ------------------------------------ | --------------------------------------------------- |
-| Pod Deletion           | `HTTP 200` with occasional `HTTP 000`             | Force-delete pods manually           | New pods auto-created to maintain replica count     |
-| Simulated Memory Crash | `HTTP 200` with minor service blip (1 pod down)   | Delete one pod to mimic OOM or crash | Replacement pod created; service stabilizes         |
-| Simulated Latency      | Slower `curl` response time output (manual delay) | Add delay between client requests    | No actual pod changes; client simulates degraded UX |
-
----
+-----
 
 ## Phase 4: Rollback Under Chaos
 
-In this phase, you'll simulate a failed deployment and measure how long it takes to recover — a key Site Reliability Engineering (SRE) metric known as **Mean Time to Recovery (MTTR)**. You'll implement a Python script that deploys an unstable application version, optionally introduces chaos (e.g., pod crashes), performs an automatic rollback, and measures how long it takes the system to stabilize.
+In this phase, you'll simulate a failed deployment and measure how long it takes to recover — **Mean Time to Recovery (MTTR)**. You'll use a Python script that deploys an unstable application version, triggers the Litmus ChaosEngine to attack the cluster, and measures how long it takes to successfully rollback.
 
-To fully observe what's happening, this phase uses **two terminals**:
-
-* **Terminal 1**: Monitor pod behavior in real time with `watch kubectl get pods`.
-* **Terminal 2**: Run the MTTR measurement script.
-
----
-
-### Step 1: Create the MTTR Measurement Script
-
-You only need to do this once. The script is reusable across all scenarios.
+### Step 1: Create the Automated MTTR Script
 
 ```bash
 cat > scripts/measure-rollback-mttr.py <<'EOF'
@@ -554,10 +444,10 @@ import subprocess
 import time
 import argparse
 import sys
-import threading
+import json
 import os
 
-CHAOS_SCRIPT = "scripts/manual-pod-chaos.sh"
+RESULTS_FILE = "chaos_results.json"
 
 def run_command(cmd, timeout=300):
     try:
@@ -567,391 +457,200 @@ def run_command(cmd, timeout=300):
         return False, "", "Command timed out"
 
 def deploy_broken_version():
-    print("Deploying unstable version...")
+    print(">> Deploying unstable version...")
     success, _, stderr = run_command("kubectl apply -f manifests/unstable/")
     if not success:
         print(f"Failed to deploy unstable version: {stderr}")
         return False
-    print("Waiting for deployment to fail...")
-    time.sleep(15)
+    print(">> Waiting for bad deployment to stabilize...")
+    time.sleep(10) 
     return True
 
-def start_manual_chaos(chaos_type):
-    if chaos_type == "pod-delete":
-        print(f"Starting manual pod deletion chaos in background...")
-        os.chmod(CHAOS_SCRIPT, 0o755)
-        thread = threading.Thread(target=lambda: os.system(f"./{CHAOS_SCRIPT}"))
-        thread.daemon = True
-        thread.start()
-        time.sleep(5)
+def trigger_litmus_chaos(chaos_file):
+    if not chaos_file:
+        print(">> No chaos selected (Baseline test).")
         return True
-    elif chaos_type == "memory-hog":
-        print("Simulating memory pressure (deleting one pod)...")
-        success, out, _ = run_command("kubectl delete pod $(kubectl get pods -l app=chaos-target-app -o jsonpath='{.items[0].metadata.name}') --grace-period=0")
-        time.sleep(5)
-        return success
-    elif chaos_type == "network-latency":
-        print("Simulating network latency using artificial delay...")
-        return True
-    else:
-        print("Unsupported or no chaos type")
-        return True
+    print(f">> Injecting Chaos using manifest: {chaos_file}")
+    run_command("kubectl delete chaosengine nginx-chaos --ignore-not-found")
+    success, _, stderr = run_command(f"kubectl apply -f {chaos_file}")
+    if not success:
+        print(f"Failed to inject chaos: {stderr}")
+        return False
+    print(">> Chaos Engine started.")
+    return True
 
 def execute_rollback():
-    print("Executing rollback...")
+    print(">> Executing rollback command...")
     start_time = time.time()
     success, _, stderr = run_command("kubectl rollout undo deployment/chaos-target-app")
     if not success:
-        print(f"Rollback failed: {stderr}")
+        print(f"Rollback command failed: {stderr}")
         return None
+    print(">> Waiting for rollout to succeed...")
     success, _, stderr = run_command("kubectl rollout status deployment/chaos-target-app --timeout=300s")
     end_time = time.time()
     if success:
-        print("Rollback completed successfully")
         return end_time - start_time
-    else:
-        print(f"Rollback status check failed: {stderr}")
-        return None
+    return None
+
+def cleanup_chaos():
+    print(">> Cleaning up chaos artifacts...")
+    run_command("kubectl delete chaosengine nginx-chaos --ignore-not-found")
+
+def save_result(chaos_type, duration):
+    data = {}
+    if os.path.exists(RESULTS_FILE):
+        try:
+            with open(RESULTS_FILE, 'r') as f:
+                data = json.load(f)
+        except:
+            pass
+    
+    if chaos_type not in data:
+        data[chaos_type] = []
+    data[chaos_type].append(duration)
+    
+    with open(RESULTS_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
+    print(f">> Result saved to {RESULTS_FILE}")
 
 def measure_rollback_mttr(chaos_type=None):
-    print(f"Measuring rollback MTTR" + (f" under {chaos_type} chaos" if chaos_type else " (baseline)"))
-    print("-" * 60)
-    if not deploy_broken_version():
-        return None
-    if not start_manual_chaos(chaos_type):
-        return None
+    label = chaos_type if chaos_type else "baseline"
+    print(f"\nMEASURING MTTR: {label.upper()}")
+    print("=" * 60)
+    
+    if not deploy_broken_version(): return None
+
+    chaos_manifest = ""
+    if chaos_type == "pod-delete":
+        chaos_manifest = "manifests/chaos/engine-pod-delete.yaml"
+    
+    if not trigger_litmus_chaos(chaos_manifest): return None
+
     mttr = execute_rollback()
+    cleanup_chaos()
+    
     if mttr:
-        print(f"\nMTTR Result: {mttr:.1f} seconds")
+        print(f">> SUCCESS: Rollback took {mttr:.2f} seconds")
+        save_result(label, mttr)
         return mttr
     else:
-        print("\nMTTR measurement failed")
+        print(">> FAILED: Rollback did not complete")
         return None
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Measure rollback MTTR under chaos conditions")
-    parser.add_argument("--chaos", choices=["pod-delete", "memory-hog", "network-latency"], help="Chaos type")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--chaos", choices=["pod-delete"], help="Chaos type")
     parser.add_argument("--baseline", action="store_true", help="Run baseline without chaos")
     args = parser.parse_args()
+    
+    if not args.chaos and not args.baseline:
+        print("Specify --baseline or --chaos pod-delete")
+        sys.exit(1)
+
     chaos = None if args.baseline else args.chaos
-    mttr = measure_rollback_mttr(chaos)
-    sys.exit(0 if mttr else 1)
+    measure_rollback_mttr(chaos)
 EOF
 
 chmod +x scripts/measure-rollback-mttr.py
 ```
 
----
+### 💡 SRE Analysis: What just happened?
 
-## Scenario Instructions: One Terminal to Watch, One to Act
+**The Technical Event:**
+You created a Python script that acts as a "Test Runner." It programmatically breaks your application (bad deploy), optionally breaks your infrastructure (ChaosEngine), and then attempts to fix it (Rollback), recording the exact time taken to succeed.
 
-Before running any of the following steps:
+**The Learning Outcome:**
+This introduces the concept of **Test Harnesses**. Chaos Engineering isn't just about breaking things randomly; it's about scientific measurement. You learned how to isolate variables:
 
-### In Terminal 1 (Watch the Rollout in Real Time)
+1.  Variable A: Bad Code (Unstable Manifest)
+2.  Variable B: Bad Infrastructure (Litmus Chaos)
+3.  Constant: The Rollback Command
 
-```bash
-watch kubectl get pods -l app=chaos-target-app
-```
+**Real Production Value:**
+SREs use scripts like this to validate **Runbooks**. If your "Emergency Rollback" runbook says "Run command X," you need to know if command X actually works when pods are crashing. This script proves that your rollback procedure is valid even when the cluster is on fire.
 
-This allows you to observe changes as they happen — such as pods failing, being deleted, or being recreated during the rollback.
+-----
 
----
+## Phase 5: Automated Stress Testing
 
-### Step 2: Baseline Rollback (No Chaos)
+Now that we have our automated tool, we will generate the data needed for our final report. We will run the **Baseline** test (no chaos) and the **Chaos** test (Pod Deletion) multiple times to get an average.
 
-#### In Terminal 2:
+### Step 1: Reset Environment
 
-```bash
-# Start clean
-kubectl apply -f manifests/stable/
-kubectl rollout status deployment/chaos-target-app
-```
-
-```bash
-# Run MTTR test with no injected failures
-python3 scripts/measure-rollback-mttr.py --baseline
-```
-
-**Expected Behavior**:
-
-* You’ll briefly see pods in `ImagePullBackOff` or `CrashLoopBackOff` (due to the unstable version).
-* Then pods will be replaced with stable ones.
-* MTTR should be low (usually under 50 seconds).
-
----
-
-### Step 3: Rollback During Pod Deletion Chaos
-
-#### In Terminal 2:
+Ensure you are starting with a healthy cluster.
 
 ```bash
 kubectl apply -f manifests/stable/
 kubectl rollout status deployment/chaos-target-app
 ```
 
-```bash
-python3 scripts/measure-rollback-mttr.py --chaos pod-delete
-```
+### Step 2: Run the Test Suite
 
-**Expected Behavior**:
+Run the following commands one by one. Watch `kubectl get pods` in a second terminal to see the difference in behavior.
 
-* Unstable pods will fail as before, but **chaos will also start deleting healthy pods** during rollback.
-* The watcher will show continuous pod terminations and recreations.
-* MTTR will increase due to the instability added by chaos.
+1.  **Establish Baseline (Run 3 times for accuracy):**
 
----
+    ```bash
+    python3 scripts/measure-rollback-mttr.py --baseline
+    python3 scripts/measure-rollback-mttr.py --baseline
+    python3 scripts/measure-rollback-mttr.py --baseline
+    ```
 
-### Step 4: Rollback During Memory Pressure Chaos
+2.  **Test Under Chaos (Run 3 times):**
 
-#### In Terminal 2:
+    ```bash
+    python3 scripts/measure-rollback-mttr.py --chaos pod-delete
+    python3 scripts/measure-rollback-mttr.py --chaos pod-delete
+    python3 scripts/measure-rollback-mttr.py --chaos pod-delete
+    ```
 
-```bash
-kubectl apply -f manifests/stable/
-kubectl rollout status deployment/chaos-target-app
-```
+By running these, you are populating the `chaos_results.json` file which we will analyze in the next phase.
 
-```bash
-python3 scripts/measure-rollback-mttr.py --chaos memory-hog
-```
+### 💡 SRE Analysis: What just happened?
 
-**Expected Behavior**:
+**The Technical Event:**
+You collected a dataset. You ran the same test multiple times to generate a statistical average (Mean) rather than relying on a single lucky (or unlucky) run.
 
-* One pod will be force-deleted to simulate OOM behavior.
-* Expect to see additional recovery time and possible restarts.
-* MTTR may increase due to delayed scheduling.
+**The Learning Outcome:**
+This teaches **Statistical Significance**. In distributed systems (like Kubernetes), network flukes happen. One slow test might be a fluke; three slow tests indicate a pattern. SREs deal in trends, not anecdotes.
 
----
+**Real Production Value:**
+This data is what you show to your boss or the CTO. You cannot ask for budget to improve infrastructure based on "It felt slow." You ask for budget based on: "Our tests show that pod instability increases recovery time by 90%." Data drives architectural decisions.
 
-### Step 5: Rollback During Network Latency Chaos
-
-#### In Terminal 2:
-
-```bash
-kubectl apply -f manifests/stable/
-kubectl rollout status deployment/chaos-target-app
-```
-
-```bash
-python3 scripts/measure-rollback-mttr.py --chaos network-latency
-```
-
-**Expected Behavior**:
-
-* No pod deletions or crashes will occur.
-* However, command responses and rollout progression may be delayed (simulated latency).
-* MTTR will reflect those delays.
-
----
-
-## What to Pay Attention To
-
-* **Pod lifecycle changes** in Terminal 1 (e.g., `Terminating`, `ContainerCreating`, restarts).
-* **MTTR output** in Terminal 2.
-* Compare how long each test takes and **how rollback is affected by different chaos types**.
-
----
-
-## Phase 5: Advanced Chaos Scenarios
-
-In this phase, we move beyond isolated failures and introduce **multiple concurrent failures** to simulate more realistic and high-impact production incidents. You'll define a custom chaos script that combines **pod deletion and memory pressure**, running them simultaneously while measuring MTTR. This scenario mirrors real-world outages where multiple components fail at once.
-
-To visualize system behavior clearly, you’ll again use **two terminals**:
-
-* **Terminal 1**: Monitor the application with `watch kubectl get pods`.
-* **Terminal 2**: Trigger the chaos scenario and run the rollback MTTR measurement.
-
----
-
-### Step 1: Create the Multi-Failure Chaos Script
-
-This script deletes two different pods every 15 seconds — one simulating pod crash, the other simulating memory exhaustion.
-
-```bash
-cat > scripts/manual-multi-chaos.sh <<'EOF'
-#!/bin/bash
-echo "=== Multi-Failure Chaos: Pod Deletion + Memory Pressure ==="
-echo "Duration: ~60 seconds, running in parallel"
-echo ""
-
-for i in {1..4}; do
-    PODS=($(kubectl get pods -l app=chaos-target-app -o jsonpath='{.items[*].metadata.name}'))
-
-    # Pod Deletion - delete one pod
-    if [ ${#PODS[@]} -ge 1 ]; then
-        echo "[$(date '+%H:%M:%S')] Round $i: Deleting pod ${PODS[0]}"
-        kubectl delete pod "${PODS[0]}" --grace-period=0
-    fi
-
-    # Memory Pressure Simulation - delete another pod
-    if [ ${#PODS[@]} -ge 2 ]; then
-        echo "[$(date '+%H:%M:%S')] Round $i: Simulating memory pressure by deleting ${PODS[1]}"
-        kubectl delete pod "${PODS[1]}" --grace-period=0
-    fi
-
-    echo "Waiting 15 seconds..."
-    sleep 15
-done
-
-echo "Multi-chaos completed at: $(date)"
-EOF
-
-chmod +x scripts/manual-multi-chaos.sh
-```
-
----
-
-### Step 2: Run Rollback MTTR Test Under Multi-Failure Chaos
-
-You’ll now reuse the same rollback measurement script from Phase 4 and run both the **chaos script** and the **rollback test** in parallel.
-
----
-
-### In Terminal 1: Watch Live Pod Behavior
-
-```bash
-watch kubectl get pods -l app=chaos-target-app
-```
-
-🔎 **What to watch for**:
-
-* Pods being deleted in pairs every \~15 seconds.
-* Kubernetes quickly recreating pods (ContainerCreating → Running).
-* Increased churn in pod status.
-
----
-
-### In Terminal 2: Trigger the Rollback + Chaos Test
-
-Start with a clean state:
-
-```bash
-kubectl apply -f manifests/stable/
-kubectl rollout status deployment/chaos-target-app
-```
-
-Then launch the chaos script in the background:
-
-```bash
-scripts/manual-multi-chaos.sh &
-CHAOS_PID=$!
-```
-
-Immediately after that, while the chaos is ongoing, run the MTTR test:
-
-```bash
-python3 scripts/measure-rollback-mttr.py --baseline
-```
-
-Wait for both processes to complete:
-
-```bash
-wait $CHAOS_PID || true
-```
-
----
-
-### Expected Output and Behavior
-
-* Terminal 1 will show **two pods being deleted and recreated** every 15 seconds.
-* Terminal 2 will display the full MTTR measurement as the system attempts to recover during this instability.
-* MTTR will likely be **higher** than all previous phases due to **concurrent stressors**.
-
----
-
-### Step 3 (Optional): Run All Chaos Scenarios Automatically
-
-To compare MTTR across **baseline**, **single-chaos**, and **multi-chaos** cases, run the following comprehensive script:
-
-```bash
-cat > scripts/comprehensive-chaos-test.sh <<'EOF'
-#!/bin/bash
-set -e
-
-echo "Comprehensive Chaos Engineering Test"
-echo "Testing rollback resilience under various failure conditions"
-echo "======================================================================"
-
-declare -A results
-
-run_test() {
-    label=$1
-    chaos=$2
-
-    echo "Test: $label"
-    kubectl apply -f manifests/stable/ > /dev/null
-    kubectl rollout status deployment/chaos-target-app > /dev/null
-
-    if [ "$chaos" == "multi-failure" ]; then
-        scripts/manual-multi-chaos.sh &
-        CHAOS_PID=$!
-        result=$(python3 scripts/measure-rollback-mttr.py --baseline 2>/dev/null | grep "MTTR Result" | awk '{print $3}')
-        wait $CHAOS_PID || true
-    elif [ "$chaos" == "none" ]; then
-        result=$(python3 scripts/measure-rollback-mttr.py --baseline 2>/dev/null | grep "MTTR Result" | awk '{print $3}')
-    else
-        result=$(python3 scripts/measure-rollback-mttr.py --chaos "$chaos" 2>/dev/null | grep "MTTR Result" | awk '{print $3}')
-    fi
-
-    results["$label"]=$result
-    echo "$label MTTR: $result"
-    echo ""
-}
-
-run_test "Baseline" "none"
-run_test "Pod Deletion" "pod-delete"
-run_test "Memory Pressure" "memory-hog"
-run_test "Network Latency" "network-latency"
-run_test "Multi-Failure" "multi-failure"
-
-echo "MTTR Comparison Summary"
-echo "======================================================================"
-for key in "Baseline" "Pod Deletion" "Memory Pressure" "Network Latency" "Multi-Failure"; do
-    echo "$key: ${results[$key]} seconds"
-done
-EOF
-
-chmod +x scripts/comprehensive-chaos-test.sh
-./scripts/comprehensive-chaos-test.sh
-```
-
-This script automatically runs each scenario and summarizes the MTTR for all cases. Use it if you want a full comparison in one go.
-
----
+-----
 
 ## Phase 6: Measuring Chaos Impact
 
-In this final phase, you’ll **analyze the results** of your chaos experiments and **generate a professional-grade report**. This helps quantify how different failure types impact MTTR (Mean Time to Recovery), allowing you to define better SLAs, inform system design decisions, and improve your incident response strategy.
+In this final phase, you’ll **analyze the results** generated in Phase 5 and **generate a professional-grade report**.
 
-You’ll use two scripts:
+### Step 1: Create the Analysis Script
 
-* One to **analyze MTTR results** and extract patterns and insights.
-* One to **generate a markdown report** summarizing the environment, tests, findings, and SRE recommendations.
-
----
-
-### Step 1: Create the MTTR Analysis Script
-
-This script assumes you've run at least 3 samples per chaos type and stored them inside the `results` dictionary. It calculates averages and the percentage increase compared to the baseline.
+This script reads your *actual* test data from `chaos_results.json` and calculates the impact of chaos on your specific cluster.
 
 ```bash
-cat > scripts/analyze-chaos-impact.py <<EOF
+cat > scripts/analyze-chaos-impact.py <<'EOF'
 #!/usr/bin/env python3
+import json
+import os
 import statistics
 
-def analyze_mttr_results():
-    """Analyze and report on MTTR results"""
+RESULTS_FILE = "chaos_results.json"
 
-    # Example results – replace with your actual values
-    results = {
-        "baseline": [45.2, 43.8, 46.1],
-        "pod-delete": [67.3, 71.2, 65.8],
-        "memory-hog": [89.4, 95.1, 87.2],
-        "network-latency": [156.7, 162.3, 149.8],
-        "multi-failure": [173.2, 181.6, 165.9]
-    }
+def analyze_mttr_results():
+    if not os.path.exists(RESULTS_FILE):
+        print(f"No results found in {RESULTS_FILE}. Run Phase 5 first.")
+        return
+
+    with open(RESULTS_FILE, 'r') as f:
+        results = json.load(f)
 
     print("Chaos Engineering Impact Analysis")
     print("=" * 50)
+
+    if "baseline" not in results:
+        print("Error: No baseline data found.")
+        return
 
     baseline_avg = statistics.mean(results["baseline"])
 
@@ -961,156 +660,80 @@ def analyze_mttr_results():
         print(f"{scenario:15}: {avg_time:6.1f}s (avg) | Impact: {impact:+5.1f}%")
 
     print("\nKey Insights:")
-    print("- Pod deletion adds ~50% to rollback time")
-    print("- Memory pressure nearly doubles recovery time")
-    print("- Network latency causes the highest MTTR (3–4x baseline)")
-    print("- Combined failures have compounding effects")
-
+    print(f"- Baseline rollback time is {baseline_avg:.1f} seconds.")
+    if "pod-delete" in results:
+        print("- Active pod deletion destabilizes deployment, increasing MTTR.")
+    
     print("\nSRE Recommendations:")
-    print("- Set rollback SLA targets accounting for chaos conditions")
-    print("- Monitor network latency as a leading indicator")
-    print("- Prepare escalation paths for compound failure scenarios")
-    print("- Practice rollbacks regularly under load and stress")
+    print("- Set rollback SLA targets based on the 'Chaos' MTTR, not the Baseline.")
+    print("- Ensure LivenessProbes are tuned so Kubernetes detects failures quickly.")
 
 if __name__ == "__main__":
     analyze_mttr_results()
 EOF
+
+chmod +x scripts/analyze-chaos-impact.py
 ```
 
-Make it executable and run it:
+### Step 2: Generate the Report
+
+Run the analysis script to see your final metrics:
 
 ```bash
-chmod +x scripts/analyze-chaos-impact.py
 python3 scripts/analyze-chaos-impact.py
 ```
 
----
+**Example Output:**
 
-### Expected Output (Example)
-
-```bash
+```text
 Chaos Engineering Impact Analysis
 ==================================================
-baseline       :   45.0s (avg) | Impact:  +0.0%
-pod-delete     :   68.1s (avg) | Impact: +51.3%
-memory-hog     :   90.6s (avg) | Impact: +101.4%
-network-latency:  156.3s (avg) | Impact: +247.3%
-multi-failure  :  173.6s (avg) | Impact: +285.7%
-
-Key Insights:
-- Pod deletion adds ~50% to rollback time
-- Memory pressure nearly doubles recovery time
-- Network latency causes the highest MTTR (3–4x baseline)
-- Combined failures have compounding effects
-
-SRE Recommendations:
-- Set rollback SLA targets accounting for chaos conditions
-- Monitor network latency as a leading indicator
-- Prepare escalation paths for compound failure scenarios
-- Practice rollbacks regularly under load and stress
+baseline       :   38.2s (avg) | Impact:  +0.0%
+pod-delete     :   72.5s (avg) | Impact: +89.8%
 ```
 
----
+### 💡 SRE Analysis: What just happened?
 
-### Step 2: Generate the Final Chaos Report
+**The Technical Event:**
+You processed raw timing data to calculate the "Chaos Tax"—the percentage increase in recovery time caused by the failure.
 
-Now you’ll generate a Markdown report summarizing:
+**The Learning Outcome:**
+You learned to quantify **Resilience**. Resilience isn't a "yes/no" checkbox; it is a spectrum. By knowing that pod deletion adds \~90% to your recovery time, you understand the "cost" of that specific failure mode.
 
-* Cluster and app info
-* Chaos scenarios executed
-* Key findings
-* SRE recommendations
+**Real Production Value:**
+This informs your **Service Level Agreements (SLAs)**.
+If you promise your customers "We will fix any bad deployment in 1 minute," your baseline test (38s) says you are safe. But your chaos test (72s) says **you will break your promise** if the cluster is unstable.
+A smart SRE uses this data to say: "We cannot promise 1 minute recovery. We can safely promise 2 minutes to account for potential instability." This prevents legal and contractual breaches.
 
-```bash
-cat > scripts/generate-report.sh <<EOF
-#!/bin/bash
-
-echo "# Chaos Engineering Report" > chaos-report.md
-echo "" >> chaos-report.md
-echo "## Test Environment" >> chaos-report.md
-echo "- **Cluster**: \$(kubectl config current-context)" >> chaos-report.md
-echo "- **Date**: \$(date)" >> chaos-report.md
-echo "- **Application**: chaos-target-app (3 replicas)" >> chaos-report.md
-echo "" >> chaos-report.md
-
-echo "## Experiments Conducted" >> chaos-report.md
-echo "1. **Pod Deletion** – Random pod termination every 15 seconds" >> chaos-report.md
-echo "2. **Memory Pressure** – Simulated by deleting pods repeatedly" >> chaos-report.md  
-echo "3. **Network Latency** – Simulated curl delays to mimic latency impact" >> chaos-report.md
-echo "4. **Multi-Failure** – Pod deletion and memory pressure combined" >> chaos-report.md
-echo "" >> chaos-report.md
-
-echo "## Key Findings" >> chaos-report.md
-echo "- Rollback procedures succeeded under all tested chaos conditions" >> chaos-report.md
-echo "- Network latency had the highest impact on rollback time" >> chaos-report.md
-echo "- Memory pressure caused moderate delays in recovery" >> chaos-report.md
-echo "- Pod deletion had the lowest impact due to Kubernetes self-healing" >> chaos-report.md
-echo "- Multi-failure scenarios produced the slowest MTTR overall" >> chaos-report.md
-echo "" >> chaos-report.md
-
-echo "## Recommendations" >> chaos-report.md
-echo "1. **Monitor network health** as a predictor of rollback performance" >> chaos-report.md
-echo "2. **Set realistic MTTR targets** that account for degraded conditions" >> chaos-report.md
-echo "3. **Run regular rollback drills** under chaos to improve MTTR" >> chaos-report.md
-echo "4. **Review resource limits and autoscaling policies** to reduce memory-related failures" >> chaos-report.md
-echo "" >> chaos-report.md
-
-echo "Report generated: chaos-report.md"
-EOF
-```
-
-Make it executable and run it:
-
-```bash
-chmod +x scripts/generate-report.sh
-./scripts/generate-report.sh
-```
-
-You’ll now have a complete `chaos-report.md` file in your project folder that you can commit or share with your team.
-
----
+-----
 
 ## Cleanup
 
-Once you’ve finished the experiment and generated your report, it’s time to clean up the environment.
+Once you’ve finished the experiment, clean up the environment.
 
 ```bash
-# Stop any active port-forward
-kill $SERVICE_PID 2>/dev/null || true
-
 # Remove all versions of the application
 kubectl delete -f manifests/stable/ --ignore-not-found
 kubectl delete -f manifests/unstable/ --ignore-not-found
 
-# Delete any running chaos experiments
-kubectl delete chaosengines --all --ignore-not-found
+# Remove Chaos Engines and Permissions
+kubectl delete -f manifests/chaos/ --ignore-not-found
 
-# Optionally remove LitmusChaos components
+# Optionally remove LitmusChaos
 kubectl delete namespace litmus --ignore-not-found
 
 echo "Cleanup completed"
 ```
 
-This will stop any active services, remove deployed resources, and optionally delete the LitmusChaos namespace. If you plan to continue exploring chaos experiments, you may choose to keep the `litmus` namespace.
-
----
+-----
 
 ## Commit Your Work
 
-Before wrapping up, make sure your repository reflects all changes made during this lab.
-
 ```bash
-# Stage all new files
 git add .
-
-# Commit your complete chaos engineering setup
-git commit -m "Complete chaos engineering lab"
-
-# Push to your GitHub repo
+git commit -m "Complete chaos engineering lab with Litmus"
 git push origin main
 ```
-
-Your GitHub repository should now contain all configuration files, scripts, and generated reports.
 
 ---
 
