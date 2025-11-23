@@ -1192,8 +1192,21 @@ def trigger_chaos_workflow():
         print(f"Failed to trigger chaos workflow: {stderr}")
         return False
     
-    print(">> Chaos workflow started. Waiting for chaos to begin...")
-    time.sleep(15)  # Give workflow time to start chaos injection
+    print(">> Waiting for chaos workflow to initialize...")
+    time.sleep(10)
+    
+    # Wait for chaos runner pod to appear and become active
+    print(">> Waiting for chaos runner to start actively deleting pods...")
+    for i in range(30):
+        # Check if chaos runner pod exists and is running
+        success, stdout, _ = run_command("kubectl get pods -n litmus -l job-name --no-headers 2>/dev/null | grep -i running")
+        if success and "Running" in stdout:
+            print(f">> Chaos runner detected! Waiting 5 more seconds for active deletion to begin...")
+            time.sleep(5)
+            return True
+        time.sleep(1)
+    
+    print(">> Warning: Chaos runner not detected, proceeding anyway...")
     return True
 
 def execute_rollback():
