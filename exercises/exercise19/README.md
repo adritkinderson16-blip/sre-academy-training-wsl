@@ -261,6 +261,8 @@ metadata:
     version: unstable
 spec:
   replicas: 3
+  strategy:
+    type: Recreate  # ← Changed from RollingUpdate to force all pods down
   selector:
     matchLabels:
       app: chaos-target-app
@@ -1124,24 +1126,30 @@ The continuous availability monitoring (Terminal 2) proved that even while chaos
 
 ---
 
-## Phase 4: Rollback Under Chaos
+# Phase 4: Rollback Under Chaos
 
 **What we're doing:** Measuring how long it takes to recover from a bad deployment when the cluster is under stress. This simulates a real production incident where you need to rollback during an outage.
 
 **Why this matters:** Your rollback procedures might work perfectly in a quiet test environment, but will they work when production is on fire? This phase finds out.
 
-### Step 1: Create the Automated MTTR Script
+**Time required:** Each test takes approximately 1 minute (baseline) or 2 minutes (with chaos). The complete test suite in Phase 5 takes about 11 minutes.
+
+---
+
+## Step 1: Create the Automated MTTR Script
 
 **What this creates:** A Python script that automates the entire test scenario:
 1. Deploy a broken version of your application
 2. (Optionally) Trigger chaos to stress the cluster
-3. Execute rollback command
-4. Measure how long it takes for the rollback to succeed
-5. Save results to a JSON file for analysis
+3. Execute rollback command and measure time to completion
+4. Save results to a JSON file for analysis
 
 **Think of it like:** An automated lab assistant that runs experiments for you and records the results.
 
 ```bash
+# Create scripts directory if it doesn't exist
+mkdir -p scripts
+
 cat > scripts/measure-rollback-mttr.py <<'EOF'
 #!/usr/bin/env python3
 import subprocess
@@ -1284,24 +1292,373 @@ chmod +x scripts/measure-rollback-mttr.py
 
 ---
 
-### 💡 SRE Analysis: Understanding Test Automation
+## Step 2: Understanding What You'll Monitor
+
+**Important:** Open THREE terminal windows for this test. Each terminal shows a different aspect of the rollback under stress.
+
+**Terminal 1** shows you the application's struggle to recover (pods failing, being deleted, recovering).
+
+**Terminal 2** runs the automated test and shows you the final MTTR measurement.
+
+**Terminal 3** shows you live events explaining WHY things are happening (image pull failures, pod deletions, container starts).
+
+---
+
+## Step 3: Run a Baseline Test (No Chaos)
+
+This establishes your "best case" recovery time under ideal conditions.
+
+**Terminal 1 - Application Pod States:**
+```bash
+# Start watching BEFORE running the script
+watch -n 0.5 kubectl get pods -n chaos-app -l app=chaos-target-app
+```
+
+**Initial state (before running script):**
+```
+NAME                                READY   STATUS    RESTARTS   AGE
+chaos-target-app-xxx-stable1        1/1     Running   0          5m
+chaos-target-app-xxx-stable2        1/1     Running   0          5m
+chaos-target-app-xxx-stable3        1/1     Running   0          5m
+```
+
+---
+
+**Terminal 2 - Execute Test:**
+```bash
+# Now run the baseline test
+python3 scripts/measure-rollback-mttr.py --baseline
+```
+
+**What you'll see:**
+```
+MEASURING MTTR: BASELINE
+============================================================
+>> Deploying unstable version...
+>> Waiting for bad deployment to stabilize...
+>> Executing rollback command...
+deployment.apps/chaos-target-app rolled back
+>> Waiting for rollout to succeed...
+deployment "chaos-target-app" successfully rolled out
+>> Cleaning up chaos artifacts...
+>> SUCCESS: Rollback took 8.29 seconds
+>> Result saved to chaos_results.json
+```
+
+**What this tells you:** The 8.29 seconds is ONLY the rollback time (from executing `kubectl rollout undo` to all pods healthy). This is your baseline recovery time.
+
+---
+
+**Terminal 3 - Live Events Log:**
+```bash
+# Watch events as they happen
+kubectl get events -n chaos-app --watch
+```
+
+**What you'll see happen in real-time:**
+
+**Step 1: Script deploys broken version**
+```
+0s    Normal   ScalingReplicaSet   deployment/chaos-target-app   Scaled down replica set ...f567f from 3 to 0
+0s    Normal   SuccessfulDelete    replicaset/...                Deleted pod: chaos-target-app-xxx-stable1
+0s    Normal   Killing             pod/...stable1                Stopping container app
+2s    Normal   ScalingReplicaSet   deployment/chaos-target-app   Scaled up replica set ...d6d79 from 0 to 3
+2s    Normal   SuccessfulCreate    replicaset/...                Created pod: chaos-target-app-xxx-broken1
+2s    Normal   Scheduled           pod/...broken1                Successfully assigned chaos-app/...
+```
+
+**Step 2: Broken pods fail to start**
+```
+5s    Normal   Pulling             pod/...broken1                Pulling image "nginx:nonexistent-tag"
+7s    Warning  Failed              pod/...broken1                Failed to pull image "nginx:nonexistent-tag"
+7s    Warning  Failed              pod/...broken1                Error: ErrImagePull
+10s   Normal   BackOff             pod/...broken1                Back-off pulling image "nginx:nonexistent-tag"
+10s   Warning  Failed              pod/...broken1                Error: ImagePullBackOff
+```
+
+**Step 3: Script executes rollback**
+```
+15s   Normal   ScalingReplicaSet   deployment/chaos-target-app   Scaled down replica set ...d6d79 from 3 to 0
+15s   Normal   SuccessfulDelete    replicaset/...                Deleted pod: chaos-target-app-xxx-broken1
+15s   Normal   Killing             pod/...broken1                Stopping container app
+16s   Normal   ScalingReplicaSet   deployment/chaos-target-app   Scaled up replica set ...f567f from 0 to 3
+16s   Normal   SuccessfulCreate    replicaset/...                Created pod: chaos-target-app-xxx-new1
+16s   Normal   Scheduled           pod/...new1                   Successfully assigned chaos-app/...
+```
+
+**Step 4: Recovery completes**
+```
+17s   Normal   Pulled              pod/...new1                   Container image "nginx:1.21-alpine" already present
+17s   Normal   Created             pod/...new1                   Created container app
+17s   Normal   Started             pod/...new1                   Started container app
+```
+
+---
+
+**Back to Terminal 1 - What you saw happen:**
+
+```
+# Before script runs
+NAME                                READY   STATUS    RESTARTS   AGE
+chaos-target-app-xxx-stable1        1/1     Running   0          5m
+chaos-target-app-xxx-stable2        1/1     Running   0          5m
+chaos-target-app-xxx-stable3        1/1     Running   0          5m
+
+# Script deploys broken version (Recreate strategy kills all first)
+chaos-target-app-xxx-stable1        1/1     Terminating         0     5m
+chaos-target-app-xxx-stable2        1/1     Terminating         0     5m
+chaos-target-app-xxx-stable3        1/1     Terminating         0     5m
+
+# All old pods gone, new broken pods appear
+chaos-target-app-xxx-broken1        0/1     ContainerCreating   0     3s
+chaos-target-app-xxx-broken2        0/1     ContainerCreating   0     3s
+chaos-target-app-xxx-broken3        0/1     ContainerCreating   0     3s
+
+# Broken pods fail to start
+chaos-target-app-xxx-broken1        0/1     ImagePullBackOff    0     15s
+chaos-target-app-xxx-broken2        0/1     ImagePullBackOff    0     15s
+chaos-target-app-xxx-broken3        0/1     ErrImagePull        0     13s
+
+# Script executes rollback
+chaos-target-app-xxx-broken1        0/1     Terminating         0     18s
+chaos-target-app-xxx-new1           0/1     ContainerCreating   0     2s
+chaos-target-app-xxx-new2           0/1     ContainerCreating   0     2s
+chaos-target-app-xxx-new3           0/1     Pending             0     1s
+
+# Recovery complete
+chaos-target-app-xxx-new1           1/1     Running   0          8s
+chaos-target-app-xxx-new2           1/1     Running   0          8s
+chaos-target-app-xxx-new3           1/1     Running   0          8s
+```
+
+**What to notice:** 
+- Started with 3 healthy pods
+- Script deployed broken version → all pods terminated (Recreate strategy)
+- New pods failed with ImagePullBackOff
+- Script executed rollback → new healthy pods created
+- Total recovery time: ~8 seconds
+
+---
+
+## Step 5: Run a Chaos Test (With Active Pod Deletion)
+
+Now measure rollback time while chaos actively deletes pods.
+
+**Keep all three terminals open from Step 4.**
+
+**Terminal 2 - Execute Chaos Test:**
+```bash
+# Run chaos-enabled test
+python3 scripts/measure-rollback-mttr.py --chaos
+```
+
+**What you'll see:**
+```
+MEASURING MTTR: WITH-CHAOS
+============================================================
+>> Deploying unstable version...
+>> Waiting for bad deployment to stabilize...
+>> Triggering chaos workflow...
+workflow.argoproj.io "pod-delete-chaos-experiment" deleted
+workflow.argoproj.io/pod-delete-chaos-experiment created
+>> Chaos workflow started. Waiting for chaos to begin...
+>> Executing rollback command...
+deployment.apps/chaos-target-app rolled back
+>> Waiting for rollout to succeed...
+deployment "chaos-target-app" successfully rolled out
+>> Cleaning up chaos artifacts...
+>> SUCCESS: Rollback took 45.7 seconds
+>> Result saved to chaos_results.json
+```
+
+**What this tells you:** With chaos active, rollback takes ~45 seconds—significantly longer than the 8-second baseline!
+
+---
+
+**Terminal 1 - Application Pod States (During Chaos):**
+
+**What you'll see (this is dramatic):**
+```
+# Broken pods failing
+NAME                                READY   STATUS              RESTARTS   AGE
+chaos-target-app-xxx-broken1        0/1     ImagePullBackOff    0          15s
+chaos-target-app-xxx-broken2        0/1     Terminating         0          15s  ← Chaos deleting!
+chaos-target-app-xxx-broken3        0/1     ImagePullBackOff    0          15s
+
+# Rollback starts creating healthy pods, but chaos interferes...
+chaos-target-app-xxx-new1           1/1     Running             0          10s
+chaos-target-app-xxx-new2           0/1     ContainerCreating   0          3s
+chaos-target-app-xxx-new3           0/1     Pending             0          1s
+chaos-target-app-xxx-new1           1/1     Terminating         0          12s  ← New pod deleted by chaos!
+
+# More chaos deletions during recovery...
+chaos-target-app-xxx-new2           1/1     Running             0          15s
+chaos-target-app-xxx-new3           1/1     Running             0          13s
+chaos-target-app-xxx-new4           0/1     ContainerCreating   0          2s
+chaos-target-app-xxx-new2           1/1     Terminating         0          18s  ← Deleted again!
+
+# Eventually chaos stops (after 30s), system stabilizes...
+chaos-target-app-xxx-new4           1/1     Running   0          45s  ← Finally stable!
+chaos-target-app-xxx-new5           1/1     Running   0          43s
+chaos-target-app-xxx-new6           1/1     Running   0          40s
+```
+
+**What to notice:** 
+- Pods keep getting deleted even after rollback starts
+- Recovery takes much longer because chaos keeps interfering
+- Notice the AGE differences—pods are constantly being recreated
+- The system eventually stabilizes once chaos stops (after its 30-second duration)
+
+---
+
+**Terminal 3 - Live Events (During Chaos):**
+
+**Additional events you'll see:**
+```
+20s   Normal   Killing             pod/...new1                   Stopping container app  ← Chaos!
+20s   Normal   SuccessfulCreate    replicaset/...                Created pod: ...new4
+25s   Normal   Killing             pod/...new2                   Stopping container app  ← More chaos!
+30s   Normal   SuccessfulCreate    replicaset/...                Created pod: ...new5
+```
+
+**What this shows:** Chaos is actively deleting healthy pods during the rollback attempt, forcing Kubernetes to keep creating replacements.
+
+You can also check workflow status:
+```bash
+# In a separate terminal (or after test completes)
+kubectl get workflows -n litmus
+```
+
+**Expected output:**
+```
+NAME                          STATUS      AGE
+pod-delete-chaos-experiment   Succeeded   2m
+```
+
+**What this confirms:** The chaos workflow completed its 30-second cycle during your rollback attempt.
+
+---
+
+## Understanding the Test Results
+
+**What you just proved:**
+
+### Baseline Test (~8 seconds):
+- Broken deployment detected
+- Rollback executed
+- All pods recovered to healthy state
+- No interference from infrastructure
+
+### Chaos Test (~45 seconds):
+- Broken deployment detected
+- Rollback executed **while chaos actively deletes pods**
+- System fights to recover against active interference
+- Takes 5-6x longer due to chaos
+
+**The Key Insight:** Your rollback command works in both scenarios, but recovery time increases dramatically when infrastructure is unstable. This is critical data for:
+- Setting realistic SLA targets (don't promise 1-minute recovery if it takes 45 seconds under stress)
+- Capacity planning (need extra replicas to absorb chaos during incidents)
+- Incident response procedures (expect longer recovery during cascading failures)
+
+---
+
+## What Each Terminal Taught You
+
+**Terminal 1 (Pod States):**
+- Shows the actual struggle: pods failing, being deleted, recovering
+- Visualizes why chaos increases MTTR
+- Proves Kubernetes self-healing works even under stress
+
+**Terminal 2 (MTTR Measurement):**
+- Gives you the hard numbers: 8s baseline vs 45s with chaos
+- Automates the entire test process
+- Saves results for statistical analysis
+
+**Terminal 3 (Live Events):**
+- Explains WHY things are happening (image pull failures, chaos deletions)
+- Provides audit trail for incident reports
+- Helps debug unexpected behavior
+
+---
+
+## Verify Your Results
+
+```bash
+# View saved results
+cat chaos_results.json
+```
+
+**Expected output:**
+```json
+{
+    "baseline": [
+        8.29
+    ],
+    "with-chaos": [
+        45.7
+    ]
+}
+```
+
+**What this data means:** You now have empirical evidence that chaos increases recovery time by ~5-6x. This isn't theoretical—it's measured data from your actual cluster.
+
+---
+
+## 💡 SRE Analysis: Understanding Test Automation
 
 **The Technical Event:**
 You created a comprehensive test harness that automates the entire chaos experiment lifecycle. This script acts as a "chaos orchestrator" that controls both your application state (broken deploy) and your infrastructure state (chaos injection), then measures recovery performance.
 
+**What Really Happened:**
+
+1. **Isolated Variables**: The script ensures only one thing changes between tests (chaos on/off)
+2. **Repeatable Experiments**: Same rollback command, same cluster, same application
+3. **Quantifiable Results**: Not "it felt slower"—actual seconds measured
+4. **Audit Trail**: JSON file proves results, events log shows causation
+
 **The Learning Outcome:**
-This introduces **Scientific Chaos Engineering**. Chaos isn't about randomly breaking things—it's about controlled experiments with measurable outcomes. Your script isolates variables:
-- **Independent Variable**: Presence or absence of chaos
-- **Dependent Variable**: Time to recover (MTTR)
-- **Controlled Variables**: Same rollback command, same cluster, same application
+
+This introduces **Scientific Chaos Engineering**. Chaos isn't about randomly breaking things—it's about controlled experiments with measurable outcomes. Your script follows the scientific method:
+
+- **Hypothesis**: "Chaos will increase MTTR"
+- **Independent Variable**: Presence or absence of pod deletion chaos
+- **Dependent Variable**: Time to complete rollback (MTTR)
+- **Controlled Variables**: Same rollback command, same cluster state, same broken deployment
+- **Results**: 8s baseline vs 45s with chaos
+- **Conclusion**: Hypothesis confirmed—chaos increases MTTR by 5-6x
 
 **Real Production Value:**
+
 Production SREs use automation like this to validate disaster recovery procedures. Your "Emergency Rollback Runbook" might say "Execute kubectl rollout undo," but does that command work when:
 - Pods are crashing unexpectedly?
-- The API server is under load?
+- The control plane is under load?
 - Multiple deployments are failing simultaneously?
+- Network partitions are occurring?
 
-This script proves your runbook works under stress, not just in ideal conditions. That validation is what separates theoretical runbooks from battle-tested procedures.
+This script proves your runbook works under stress, not just in ideal conditions. That validation is what separates theoretical runbooks from battle-tested procedures that work during real incidents at 3 AM.
+
+**Why This Matters:**
+
+In production, you'll have SLAs (Service Level Agreements) that promise things like:
+- "99.9% uptime" (43 minutes downtime per month allowed)
+- "15-minute recovery time for critical incidents"
+- "Zero data loss during rollbacks"
+
+Your chaos testing data lets you make these commitments confidently. You're not guessing—you've measured it. When leadership asks "Can we hit 99.9% uptime?", you respond with "Yes, our rollback takes 45 seconds even under chaos, well within our 15-minute recovery SLA."
+
+**Time Investment:**
+
+Yes, each test takes 1-2 minutes. But in production, you'd schedule these tests to run automatically during off-hours (nightly or weekly). The infrastructure team doesn't need to be present—the script runs, collects data, and saves results. Over time, you build a dataset showing how MTTR trends as you improve your systems.
+
+**Next Evolution:**
+
+Professional SRE teams extend this approach to test:
+- Database rollbacks under chaos
+- Multi-region failover during network partitions
+- Rollback success rate (does it work 100% of the time or only 80%?)
+- Rollback under different chaos types (CPU starvation, memory pressure, disk I/O saturation)
+
+You've built the foundation. The methodology scales to any recovery procedure you need to validate.
 
 ---
 
