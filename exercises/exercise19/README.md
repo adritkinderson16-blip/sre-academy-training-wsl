@@ -789,9 +789,34 @@ spec:
         args:
           - |
             kubectl apply -f /tmp/chaosengine.yaml -n {{workflow.parameters.adminModeNamespace}}
-            echo "Waiting for chaos to complete..."
-            sleep 50
+            echo "ChaosEngine created. Waiting for chaos runner to start..."
+            sleep 5
+            
+            echo "Monitoring ChaosResult status..."
+            # Wait up to 90 seconds for chaos to complete
+            for i in $(seq 1 90); do
+              PHASE=$(kubectl get chaosresult pod-delete-engine-pod-delete -n {{workflow.parameters.adminModeNamespace}} -o jsonpath='{.status.experimentStatus.phase}' 2>/dev/null || echo "NotFound")
+              VERDICT=$(kubectl get chaosresult pod-delete-engine-pod-delete -n {{workflow.parameters.adminModeNamespace}} -o jsonpath='{.status.experimentStatus.verdict}' 2>/dev/null || echo "Unknown")
+              
+              echo "[$i/90] Phase: $PHASE | Verdict: $VERDICT"
+              
+              # Exit when chaos reaches a final state
+              if [ "$PHASE" = "Completed" ]; then
+                echo "✅ Chaos experiment completed successfully!"
+                break
+              elif [ "$PHASE" = "Stopped" ] || [ "$PHASE" = "Error" ]; then
+                echo "⚠️  Chaos experiment ended with phase: $PHASE"
+                break
+              fi
+              
+              sleep 1
+            done
+            
+            echo ""
+            echo "=== Final ChaosResult ==="
             kubectl get chaosresult -n {{workflow.parameters.adminModeNamespace}}
+            echo ""
+            kubectl describe chaosresult pod-delete-engine-pod-delete -n {{workflow.parameters.adminModeNamespace}} | grep -A 10 "Status:"
 
     # Step 3: Cleanup
     - name: revert-chaos
@@ -800,8 +825,10 @@ spec:
         command: [sh, -c]
         args:
           - |
+            echo "Cleaning up chaos resources..."
             kubectl delete chaosengine pod-delete-engine -n {{workflow.parameters.adminModeNamespace}} --ignore-not-found=true
             kubectl delete chaosexperiment pod-delete -n {{workflow.parameters.adminModeNamespace}} --ignore-not-found=true
+            echo "Cleanup completed"
 EOF
 ```
 
