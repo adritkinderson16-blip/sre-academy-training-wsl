@@ -98,9 +98,13 @@ git push -u origin main
 
 ## Phase 1: Deploy Target Application
 
-We'll create a simple but realistic web application in a dedicated namespace that we can stress test and practice rollbacks with.
+**What we're building:** A three-replica nginx deployment that will serve as our "production application." We need something to break during chaos experiments.
+
+**Why two versions?** We're creating both a stable version (works correctly) and an unstable version (intentionally broken) so we can practice rollback procedures under stress.
 
 ### Step 1: Create Application Namespace
+
+**What this does:** Creates an isolated namespace called `chaos-app` where our application will live. This separation mirrors production practices where applications run in dedicated namespaces rather than the default namespace.
 
 ```bash
 # Create dedicated namespace for the target application
@@ -110,7 +114,20 @@ kubectl create namespace chaos-app
 kubectl get namespace chaos-app
 ```
 
+**Expected output:**
+```
+namespace/chaos-app created
+NAME        STATUS   AGE
+chaos-app   Active   1s
+```
+
+**What just happened:** Kubernetes created a new namespace. Think of it as a separate "room" in your cluster where resources are isolated from other namespaces.
+
+---
+
 ### Step 2: Create Stable Application Manifests
+
+**What this does:** Creates three YAML files that define your application: deployment (the pods), service (networking), and configmap (web content). These files don't deploy anything yet—they're just text files on your computer.
 
 ```bash
 # Create stable deployment
@@ -214,7 +231,22 @@ data:
 EOF
 ```
 
-### Step 2: Create Unstable Application (For Rollback Testing)
+**What you just created:**
+- `deployment.yaml` - Defines 3 nginx pods with health checks and resource limits
+- `service.yaml` - Creates a network endpoint to access the pods
+- `configmap.yaml` - Contains the HTML content the nginx pods will serve
+
+**Key details to notice:**
+- `replicas: 3` means we'll have 3 copies of the application running
+- `namespace: chaos-app` places everything in our dedicated namespace
+- `livenessProbe` and `readinessProbe` help Kubernetes detect if pods are healthy
+- The label `app: chaos-target-app` is how chaos experiments will find these pods
+
+---
+
+### Step 3: Create Unstable Application (For Rollback Testing)
+
+**What this does:** Creates manifests for a broken version of your application. The image tag `nonexistent-tag` doesn't exist, so pods will fail with `ImagePullBackOff`. This simulates a bad production deployment.
 
 ```bash
 # Create unstable deployment with broken image
@@ -283,29 +315,98 @@ data:
 EOF
 ```
 
-### Step 3: Deploy and Verify Stable Application
+**Why create a broken version?** In Phase 4, we'll deploy this broken version and measure how long it takes to roll back to the stable version—both with and without chaos attacking the cluster.
 
+---
+
+### Step 4: Deploy and Verify Stable Application
+
+**What this does:** Actually deploys your application to Kubernetes. Until now, you've just been creating files. This command sends those files to the Kubernetes API server.
+
+**Important:** Open TWO terminal windows for this section. Keep both visible.
+
+**Terminal 1 - Observation:**
+```bash
+# Watch pods being created in real-time
+watch kubectl get pods -n chaos-app
+```
+
+**Terminal 2 - Action:**
 ```bash
 # Deploy stable version
 kubectl apply -f manifests/stable/
-kubectl rollout status deployment/chaos-target-app -n chaos-app
 
-# Verify pods are running
-kubectl get pods -n chaos-app -l app=chaos-target-app
+# Wait for deployment to complete
+kubectl rollout status deployment/chaos-target-app -n chaos-app
+```
+
+**What you'll see in Terminal 1:**
+```
+NAME                               READY   STATUS              RESTARTS   AGE
+chaos-target-app-7d9f8c5b4-abc12   0/1     ContainerCreating   0          2s
+chaos-target-app-7d9f8c5b4-def34   0/1     ContainerCreating   0          2s
+chaos-target-app-7d9f8c5b4-ghi56   0/1     ContainerCreating   0          2s
+```
+
+Then after ~10 seconds:
+```
+NAME                               READY   STATUS    RESTARTS   AGE
+chaos-target-app-7d9f8c5b4-abc12   1/1     Running   0          15s
+chaos-target-app-7d9f8c5b4-def34   1/1     Running   0          15s
+chaos-target-app-7d9f8c5b4-ghi56   1/1     Running   0          15s
+```
+
+**What you'll see in Terminal 2:**
+```
+configmap/app-content created
+deployment.apps/chaos-target-app created
+service/chaos-target-service created
+deployment "chaos-target-app" successfully rolled out
+```
+
+**What just happened:**
+1. Kubernetes created the ConfigMap with your HTML content
+2. Kubernetes created the Deployment, which created a ReplicaSet, which created 3 Pods
+3. Each pod pulled the nginx:1.21-alpine image from Docker Hub
+4. Kubernetes started the containers and ran health checks
+5. Once healthy, the pods were marked as "Ready"
+6. Kubernetes created a Service to route traffic to the pods
+
+**Verify everything is working:**
+```bash
+# See all resources in chaos-app namespace
+kubectl get all -n chaos-app
 
 # Test the application
 kubectl get svc chaos-target-service -n chaos-app
 minikube service chaos-target-service -n chaos-app --url
 ```
 
+Visit the URL in your browser. You should see: "Status: STABLE"
+
+**Press Ctrl+C in Terminal 1 to stop watching pods.**
+
 ---
 
 ## Phase 2: Install Argo Workflows and LitmusChaos
 
-Modern chaos engineering relies on workflow orchestration. LitmusChaos 3.x uses Argo Workflows to manage the complete chaos experiment lifecycle: install experiments, execute chaos, collect results, and cleanup.
+**What we're installing:** Two systems that work together:
+1. **Argo Workflows** - Orchestrates multi-step chaos experiments (like a conductor leading an orchestra)
+2. **LitmusChaos** - Actually executes the chaos (the musicians playing the instruments)
+
+**Why both?** Modern chaos engineering doesn't just "break stuff randomly." It follows a workflow: install experiment → execute chaos → collect results → cleanup. Argo manages this workflow; Litmus executes the chaos.
 
 ### Step 1: Install Argo Workflows
 
+**What this does:** Installs Argo Workflows, which will orchestrate our chaos experiments. This is similar to installing a CI/CD system like Jenkins or GitHub Actions.
+
+**Terminal 1 - Observation:**
+```bash
+# Watch Argo pods being created
+watch kubectl get pods -n argo
+```
+
+**Terminal 2 - Action:**
 ```bash
 # Create namespace for Argo
 kubectl create namespace argo
@@ -313,16 +414,60 @@ kubectl create namespace argo
 # Install Argo Workflows
 kubectl apply -n argo -f https://github.com/argoproj/argo-workflows/releases/download/v3.5.11/install.yaml
 
-# Wait for Argo to be ready
+# Wait for Argo to be ready (this may take 1-2 minutes)
 echo "Waiting for Argo Workflows to be ready..."
 kubectl wait --for=condition=Ready pods --all -n argo --timeout=300s
-
-# Verify installation
-kubectl get pods -n argo
 ```
+
+**What you'll see in Terminal 1:**
+
+Initially:
+```
+NAME                                   READY   STATUS              RESTARTS   AGE
+argo-server-667f6fdf45-xxxxx           0/1     ContainerCreating   0          5s
+workflow-controller-5d5c84f6c8-xxxxx   0/1     ContainerCreating   0          5s
+```
+
+After 30-60 seconds:
+```
+NAME                                   READY   STATUS    RESTARTS   AGE
+argo-server-667f6fdf45-xxxxx           1/1     Running   0          45s
+workflow-controller-5d5c84f6c8-xxxxx   1/1     Running   0          45s
+```
+
+**What you'll see in Terminal 2:**
+```
+namespace/argo created
+customresourcedefinition.apiextensions.k8s.io/clusterworkflowtemplates.argoproj.io created
+customresourcedefinition.apiextensions.k8s.io/cronworkflows.argoproj.io created
+customresourcedefinition.apiextensions.k8s.io/workfloweventbindings.argoproj.io created
+customresourcedefinition.apiextensions.k8s.io/workflows.argoproj.io created
+...
+pod/argo-server-667f6fdf45-xxxxx condition met
+pod/workflow-controller-5d5c84f6c8-xxxxx condition met
+```
+
+**What just happened:**
+1. Created `argo` namespace
+2. Installed Custom Resource Definitions (CRDs) for Workflow, CronWorkflow, etc.
+3. Deployed two pods: `argo-server` (web UI) and `workflow-controller` (executes workflows)
+4. Argo is now watching for Workflow resources in your cluster
+
+**Press Ctrl+C in Terminal 1 to stop watching.**
+
+---
 
 ### Step 2: Install LitmusChaos Operator
 
+**What this does:** Installs the LitmusChaos operator, which watches for ChaosEngine resources and executes chaos experiments.
+
+**Terminal 1 - Observation:**
+```bash
+# Watch Litmus pods being created
+watch kubectl get pods -n litmus
+```
+
+**Terminal 2 - Action:**
 ```bash
 # Create dedicated namespace
 kubectl create namespace litmus
@@ -333,14 +478,39 @@ kubectl apply -f https://litmuschaos.github.io/litmus/litmus-operator-v3.0.0.yam
 # Wait for installation to complete
 echo "Waiting for LitmusChaos operator to be ready..."
 kubectl wait --for=condition=Ready pods --all -n litmus --timeout=300s
-
-# Verify operator is running
-kubectl get pods -n litmus
 ```
+
+**What you'll see in Terminal 1:**
+```
+NAME                                 READY   STATUS    RESTARTS   AGE
+chaos-operator-ce-75767d49b7-xxxxx   1/1     Running   0          30s
+```
+
+**What you'll see in Terminal 2:**
+```
+namespace/litmus created
+customresourcedefinition.apiextensions.k8s.io/chaosengines.litmuschaos.io created
+customresourcedefinition.apiextensions.k8s.io/chaosexperiments.litmuschaos.io created
+customresourcedefinition.apiextensions.k8s.io/chaosresults.litmuschaos.io created
+...
+pod/chaos-operator-ce-75767d49b7-xxxxx condition met
+```
+
+**What just happened:**
+1. Created `litmus` namespace
+2. Installed CRDs for ChaosEngine, ChaosExperiment, and ChaosResult
+3. Deployed the chaos operator pod
+4. The operator is now watching for ChaosEngine resources
+
+**Press Ctrl+C in Terminal 1.**
+
+---
 
 ### Step 3: Setup Chaos Permissions (RBAC)
 
-Argo Workflows needs permissions to orchestrate chaos experiments, and chaos experiments need permissions to affect target applications.
+**What this does:** Gives Argo Workflows permission to create chaos experiments in the litmus namespace, and gives chaos experiments permission to delete pods in the chaos-app namespace. Without these permissions, chaos experiments would fail with "Forbidden" errors.
+
+**Think of it like:** Creating access badges for employees. Argo gets a badge to enter the "litmus" building, and chaos experiments get badges to enter the "chaos-app" building.
 
 ```bash
 # Create RBAC directory if it doesn't exist
@@ -431,6 +601,25 @@ EOF
 kubectl apply -f manifests/chaos/argo-chaos-rbac.yaml
 ```
 
+**Expected output:**
+```
+serviceaccount/argo-chaos created
+role.rbac.authorization.k8s.io/argo-chaos-role created
+rolebinding.rbac.authorization.k8s.io/argo-chaos-rolebinding created
+role.rbac.authorization.k8s.io/argo-chaos-target-role created
+rolebinding.rbac.authorization.k8s.io/argo-chaos-target-rolebinding created
+```
+
+**What you just created:**
+- **ServiceAccount**: An identity for Argo workflows to use
+- **Role in litmus namespace**: Permissions to create chaos experiments
+- **Role in chaos-app namespace**: Permissions to delete your application pods
+- **RoleBindings**: Connects the service account to the roles
+
+**Why cross-namespace permissions?** Chaos infrastructure (litmus) needs to affect your application (chaos-app). This is like giving a security tester permission to test your application even though they're in a different department.
+
+---
+
 ### 💡 SRE Analysis: Understanding the Architecture
 
 **The Technical Stack:**
@@ -446,17 +635,21 @@ This architecture demonstrates **Separation of Concerns**. Argo handles the "wha
 In production environments, chaos experiments aren't run manually. They're scheduled using Argo CronWorkflows to run automatically during off-peak hours. The workflow-based approach means your chaos experiments become version-controlled, auditable, and CI/CD-ready—just like your application code.
 
 **Namespace Isolation:**
-Notice we're using separate namespaces: `chaos-app` for your target application and `litmus` for chaos infrastructure. This mirrors production practices where applications run in dedicated namespaces (dev, staging, prod) while chaos tooling runs in infrastructure namespaces. The cross-namespace RBAC you configured allows chaos experiments to safely target applications without granting excessive cluster-wide permissions.
+Notice we're using separate namespaces: `chaos-app` for your target application, `litmus` for chaos infrastructure, and `argo` for workflow orchestration. This mirrors production practices where applications run in dedicated namespaces (dev, staging, prod) while infrastructure tools run separately. The cross-namespace RBAC you configured allows chaos experiments to safely target applications without granting excessive cluster-wide permissions.
 
 ---
 
 ## Phase 3: Basic Chaos Experiments (Workflow-Based)
 
-Instead of running chaos experiments directly, we'll use Argo Workflows to orchestrate the complete chaos lifecycle. This approach mirrors production practices where chaos experiments are automated and repeatable.
+**What we're doing:** Creating an Argo Workflow that orchestrates a pod-delete chaos experiment. Instead of manually running commands, we'll define the entire chaos experiment as a workflow that Argo executes automatically.
+
+**Why workflows?** This is how chaos engineering works in production. Experiments are defined as code, version-controlled in Git, and executed automatically by CI/CD systems or scheduled to run during maintenance windows.
 
 ### Step 1: Create the Pod-Delete Chaos Workflow
 
-This workflow demonstrates the complete chaos experiment pattern: install the experiment definition, execute chaos against your application, and cleanup afterward.
+**What this creates:** A Workflow resource that defines a 3-step process: install the experiment definition, execute chaos, and cleanup. This is NOT running chaos yet—we're just creating the "recipe."
+
+**Think of it like:** Writing a recipe in a cookbook. The recipe exists, but no food is being cooked yet.
 
 ```bash
 cat > manifests/chaos/pod-delete-workflow.yaml <<'EOF'
@@ -611,85 +804,232 @@ spec:
 EOF
 ```
 
+**What you just created:** A workflow with 3 templates (steps):
+
+1. **install-chaos-experiments**: Creates a ChaosExperiment definition (the template for how to delete pods)
+2. **pod-delete-chaos**: Creates a ChaosEngine (triggers the actual chaos)
+3. **revert-chaos**: Cleans up by deleting the ChaosEngine and ChaosExperiment
+
+**Key parameters to notice:**
+- `TOTAL_CHAOS_DURATION: "30"` - Run chaos for 30 seconds
+- `CHAOS_INTERVAL: "10"` - Delete pods every 10 seconds
+- `PODS_AFFECTED_PERC: "50"` - Delete 50% of pods each time
+- `appns: chaos-app` - Target the chaos-app namespace
+- `applabel: 'app=chaos-target-app'` - Find pods with this label
+
+---
+
 ### Step 2: Execute and Observe
 
-Open two terminals to see workflow-orchestrated chaos in action.
+**What we're doing:** Actually running the workflow to see chaos in action. This is when pods start getting deleted.
 
-**Terminal 1 (Observation):**
+**Important:** You need THREE terminal windows open for this section. Arrange them so you can see all three at once.
 
+**Terminal 1 - Application Pods (chaos-app namespace):**
 ```bash
-# Watch your application pods
+# Watch your application pods (these will be deleted by chaos)
 watch kubectl get pods -n chaos-app -l app=chaos-target-app
 ```
 
-**Terminal 2 (Action):**
+**What you'll see:** Your three application pods running normally, then every 10 seconds some will be deleted and recreated.
 
+---
+
+**Terminal 2 - Chaos Infrastructure (litmus namespace):**
 ```bash
-# Submit the workflow
+# Watch chaos-related pods (these execute the chaos)
+watch kubectl get pods -n litmus
+```
+
+**What you'll see:** Workflow pods being created to execute each step, and a chaos-runner pod that actually deletes your application pods.
+
+---
+
+**Terminal 3 - Execute the Workflow:**
+```bash
+# Submit the workflow to Argo
 kubectl create -f manifests/chaos/pod-delete-workflow.yaml
 
 # Watch workflow progress
 kubectl get workflows -n litmus -w
-
-# In another terminal, view detailed workflow status
-kubectl describe workflow pod-delete-chaos-experiment -n litmus
-
-# View workflow logs
-kubectl logs -n litmus -l workflows.argoproj.io/workflow=pod-delete-chaos-experiment --follow
 ```
 
-**What to observe:**
+**What you'll see:**
+```
+NAME                          STATUS    AGE   MESSAGE
+pod-delete-chaos-experiment   Pending   1s    
+pod-delete-chaos-experiment   Running   5s    
+pod-delete-chaos-experiment   Running   50s   
+pod-delete-chaos-experiment   Succeeded 60s
+```
 
-1. The workflow creates a series of pods to execute each step
-2. First, it installs the ChaosExperiment definition
-3. Then it creates a ChaosEngine that spawns a chaos-runner pod
-4. Every 10 seconds, one of your application pods is deleted
-5. Kubernetes automatically recreates the deleted pods (Self-Healing)
-6. After 30 seconds, chaos stops and cleanup occurs
+---
 
-### Step 3: Verify Results
+### What Happens (Step by Step)
+
+**T=0s - You run kubectl create:**
+- Workflow resource is created in Kubernetes
+- Argo Workflow Controller sees the new workflow
+
+**T=1s - Step 1 begins:**
+- Argo creates a pod named `pod-delete-chaos-experiment-install-xyz`
+- **In Terminal 2**, you'll see this pod appear
+- This pod runs `kubectl apply -f /tmp/pod-delete.yaml`
+- A ChaosExperiment resource is created
+
+**T=5s - Step 1 completes, Step 2 begins:**
+- Argo creates a pod named `pod-delete-chaos-experiment-run-xyz`
+- **In Terminal 2**, you'll see this pod appear
+- This pod runs `kubectl apply -f /tmp/chaosengine.yaml`
+- A ChaosEngine resource is created
+
+**T=10s - LitmusChaos Operator springs into action:**
+- The operator sees the new ChaosEngine
+- It creates a chaos-runner pod: `pod-delete-engine-runner-xyz`
+- **In Terminal 2**, you'll see the runner pod appear
+- **In Terminal 1**, you'll see your application pods start getting deleted!
+
+**T=10s-40s - Active chaos period:**
+Every 10 seconds, the chaos-runner:
+- Finds all pods with label `app=chaos-target-app` in namespace `chaos-app`
+- Deletes 50% of them (about 1-2 pods)
+- **In Terminal 1**, you'll see:
+  - Pods transition from Running → Terminating → (disappear)
+  - New pods appear with status ContainerCreating → Running
+  - This happens multiple times (every 10 seconds for 30 seconds = 3 times)
+
+**T=50s - Step 2 completes, Step 3 begins:**
+- Argo creates a cleanup pod
+- This pod deletes the ChaosEngine and ChaosExperiment
+- **In Terminal 2**, you'll see the runner pod disappear
+
+**T=60s - Workflow completes:**
+- **Terminal 3** shows workflow status: Succeeded
+- **Terminal 1** shows your application pods all running normally again
+- **Terminal 2** shows only the chaos-operator-ce pod remaining
+
+---
+
+### Verify Results
+
+**Press Ctrl+C in all terminals to stop watching.**
+
+Now let's examine what happened:
 
 ```bash
-# Check ChaosEngine status
+# Check if ChaosEngine still exists (it should be deleted)
 kubectl get chaosengine -n litmus
+```
 
-# Check ChaosResult for detailed verdict
+**Expected output:**
+```
+No resources found in litmus namespace.
+```
+
+**What this means:** The cleanup step successfully deleted the ChaosEngine.
+
+---
+
+```bash
+# Check ChaosResult (this persists for audit trail)
 kubectl get chaosresult -n litmus
-kubectl describe chaosresult pod-delete-engine-pod-delete -n litmus
+```
 
+**Expected output:**
+```
+NAME                            AGE
+pod-delete-engine-pod-delete    2m
+```
+
+**What this means:** A ChaosResult was created to record what happened during the experiment.
+
+---
+
+```bash
+# View detailed results
+kubectl describe chaosresult pod-delete-engine-pod-delete -n litmus
+```
+
+**Look for:**
+- `Verdict: Pass` or `Verdict: Fail` (did the experiment complete successfully?)
+- `Probe Success Percentage` (how many pods were actually deleted?)
+- `Total Chaos Duration` (how long chaos ran)
+
+---
+
+```bash
 # View events showing pod deletions
 kubectl get events -n chaos-app --sort-by='.lastTimestamp' | grep -i "delete"
 ```
 
+**Expected output:** You'll see multiple events like:
+```
+Normal  Killing  pod/chaos-target-app-xxx  Stopping container app
+```
+
+**What this means:** Kubernetes recorded each time a pod was deleted.
+
+---
+
 ### 💡 SRE Analysis: Understanding Declarative Chaos
 
 **The Technical Event:**
-You didn't write a script to delete pods or manually execute commands. You created an Argo Workflow that declared your chaos intent: "Install this experiment, execute pod deletion for 30 seconds, then clean up." The workflow orchestrator handled all execution details.
+You didn't write a bash script to delete pods or manually execute commands. You created an Argo Workflow that declared your chaos intent: "Install this experiment, execute pod deletion for 30 seconds, then clean up." The workflow orchestrator handled all execution details.
+
+**What Really Happened Under the Hood:**
+
+1. **You created a Workflow CRD** - Just YAML stored in Kubernetes, not running yet
+2. **Argo Workflow Controller saw it** - Started executing the workflow
+3. **Step 1 pod created** - Installed the ChaosExperiment definition (the template)
+4. **Step 2 pod created** - Created the ChaosEngine (the trigger)
+5. **LitmusChaos Operator reacted** - Saw ChaosEngine, created runner pod
+6. **Runner pod executed chaos** - Actually deleted your application pods
+7. **Kubernetes self-healed** - Automatically recreated deleted pods
+8. **Step 3 pod created** - Cleaned up ChaosEngine and ChaosExperiment
+9. **Workflow marked complete** - All temporary pods deleted, only audit trail remains
 
 **The Learning Outcome:**
 This demonstrates **Declarative Chaos Engineering**. Traditional chaos engineering involved imperative scripts (bash loops deleting pods). Modern chaos engineering uses declarative workflows that specify what should happen, not how. This makes chaos experiments:
-- Version controllable (commit workflows to Git)
-- Reproducible (same YAML produces same results)
-- Auditable (workflow history shows who ran what chaos)
-- Schedulable (convert to CronWorkflow for automated testing)
+- **Version controllable**: Commit workflows to Git, track changes
+- **Reproducible**: Same YAML produces same results every time
+- **Auditable**: Workflow history shows who ran what chaos and when
+- **Schedulable**: Convert to CronWorkflow for automated testing
+- **Composable**: Chain multiple experiments (pod-delete → network-latency → cpu-stress)
 
 **Real Production Value:**
 In production environments, these workflows aren't triggered manually. They're either:
-1. **Scheduled**: Run as CronWorkflows during maintenance windows
+1. **Scheduled**: Run as CronWorkflows during maintenance windows (every Tuesday at 2 AM)
 2. **CI/CD Integrated**: Executed automatically in staging before production deployments
 3. **Game Day Exercises**: Used during quarterly chaos engineering drills
 
 The workflow approach means your chaos practices scale from a single engineer's experiment to organization-wide resilience testing.
 
+**Why Argo Workflows Instead of Alternatives:**
+- **Bash scripts**: Hard to maintain, no observability, not schedulable
+- **Direct ChaosEngine**: No multi-step orchestration, manual cleanup
+- **CI/CD tools**: Not Kubernetes-native, less flexible for complex workflows
+- **LitmusChaos Portal**: Heavy installation, overkill for learning
+
+Argo Workflows is the production standard for orchestrating Kubernetes-based workflows, not just for chaos engineering but also for ML pipelines, data processing, and complex deployments.
+
 ---
 
 ## Phase 4: Rollback Under Chaos
 
-In this phase, you'll simulate a failed deployment and measure how long it takes to recover while chaos actively stresses your cluster—measuring true **Mean Time to Recovery (MTTR)** under degraded conditions.
+**What we're doing:** Measuring how long it takes to recover from a bad deployment when the cluster is under stress. This simulates a real production incident where you need to rollback during an outage.
+
+**Why this matters:** Your rollback procedures might work perfectly in a quiet test environment, but will they work when production is on fire? This phase finds out.
 
 ### Step 1: Create the Automated MTTR Script
 
-This Python script orchestrates the complete test scenario: deploy broken code, trigger chaos, execute rollback, and measure recovery time.
+**What this creates:** A Python script that automates the entire test scenario:
+1. Deploy a broken version of your application
+2. (Optionally) Trigger chaos to stress the cluster
+3. Execute rollback command
+4. Measure how long it takes for the rollback to succeed
+5. Save results to a JSON file for analysis
+
+**Think of it like:** An automated lab assistant that runs experiments for you and records the results.
 
 ```bash
 cat > scripts/measure-rollback-mttr.py <<'EOF'
@@ -825,6 +1165,15 @@ EOF
 chmod +x scripts/measure-rollback-mttr.py
 ```
 
+**What you just created:** A test automation script with five key functions:
+- `deploy_broken_version()` - Applies the unstable manifests
+- `trigger_chaos_workflow()` - Starts the Argo Workflow
+- `execute_rollback()` - Runs rollback and times it
+- `cleanup_chaos()` - Removes all chaos artifacts
+- `save_result()` - Stores timing data to JSON
+
+---
+
 ### 💡 SRE Analysis: Understanding Test Automation
 
 **The Technical Event:**
@@ -848,11 +1197,13 @@ This script proves your runbook works under stress, not just in ideal conditions
 
 ## Phase 5: Automated Stress Testing
 
-Now that we have automated testing tools, we'll generate statistically significant data by running multiple test iterations. This provides reliable metrics rather than anecdotal evidence.
+**What we're doing:** Running multiple test iterations to collect statistically significant data. We'll measure rollback time both with and without chaos to quantify the impact of instability.
+
+**Why multiple runs?** One test could be affected by random factors (network hiccup, scheduler delay). Three tests reveal patterns.
 
 ### Step 1: Reset Environment
 
-Ensure you're starting with a clean, healthy cluster.
+**What this does:** Ensures you're starting from a known-good state. If previous tests left broken deployments or chaos artifacts, this cleans them up.
 
 ```bash
 # Apply stable version
@@ -867,65 +1218,289 @@ kubectl get chaosengine -n litmus
 kubectl get workflows -n litmus
 ```
 
-### Step 2: Run Baseline Tests (No Chaos)
+**Expected output:**
+```
+# From rollout status:
+deployment "chaos-target-app" successfully rolled out
 
-Establish your baseline performance by measuring rollback time under ideal conditions.
+# From get pods:
+NAME                               READY   STATUS    RESTARTS   AGE
+chaos-target-app-7d9f8c5b4-abc12   1/1     Running   0          1m
+chaos-target-app-7d9f8c5b4-def34   1/1     Running   0          1m
+chaos-target-app-7d9f8c5b4-ghi56   1/1     Running   0          1m
 
-```bash
-# Run baseline test 3 times for statistical accuracy
-python3 scripts/measure-rollback-mttr.py --baseline
-sleep 30  # Allow cluster to stabilize
-
-python3 scripts/measure-rollback-mttr.py --baseline
-sleep 30
-
-python3 scripts/measure-rollback-mttr.py --baseline
-sleep 30
+# From checking chaos artifacts:
+No resources found in litmus namespace.
 ```
 
-**What to observe in Terminal 2:**
-- Deployment switches to unstable version (ImagePullBackOff)
-- Rollback command executes
-- Pods transition back to stable version
-- All pods become Ready
+**What to do if something's wrong:**
+```bash
+# If pods are stuck in bad state:
+kubectl delete deployment chaos-target-app -n chaos-app
+kubectl apply -f manifests/stable/
 
-The baseline establishes your "best case" recovery time.
+# If chaos artifacts exist:
+kubectl delete workflow --all -n litmus
+kubectl delete chaosengine --all -n litmus
+```
+
+---
+
+### Step 2: Run Baseline Tests (No Chaos)
+
+**What this does:** Measures how long rollback takes under perfect conditions. This establishes your "best case" performance.
+
+**Important:** Open TWO terminal windows.
+
+**Terminal 1 - Observation:**
+```bash
+# Watch what happens to your pods during each test
+watch kubectl get pods -n chaos-app -l app=chaos-target-app
+```
+
+**Terminal 2 - Execute Tests:**
+```bash
+# Run baseline test 1
+python3 scripts/measure-rollback-mttr.py --baseline
+```
+
+**What you'll see in Terminal 1:**
+
+Initially (stable version running):
+```
+NAME                               READY   STATUS    RESTARTS   AGE
+chaos-target-app-7d9f8c5b4-abc12   1/1     Running   0          2m
+chaos-target-app-7d9f8c5b4-def34   1/1     Running   0          2m
+chaos-target-app-7d9f8c5b4-ghi56   1/1     Running   0          2m
+```
+
+After script deploys unstable version:
+```
+NAME                               READY   STATUS             RESTARTS   AGE
+chaos-target-app-8a2b3c4d5-xyz11   0/1     ImagePullBackOff   0          10s
+chaos-target-app-8a2b3c4d5-xyz22   0/1     ImagePullBackOff   0          10s
+chaos-target-app-8a2b3c4d5-xyz33   0/1     ErrImagePull       0          8s
+```
+
+After script executes rollback:
+```
+NAME                               READY   STATUS              RESTARTS   AGE
+chaos-target-app-7d9f8c5b4-new11   0/1     ContainerCreating   0          2s
+chaos-target-app-7d9f8c5b4-new22   0/1     ContainerCreating   0          2s
+chaos-target-app-7d9f8c5b4-new33   0/1     ContainerCreating   0          2s
+```
+
+Finally (rollback complete):
+```
+NAME                               READY   STATUS    RESTARTS   AGE
+chaos-target-app-7d9f8c5b4-new11   1/1     Running   0          25s
+chaos-target-app-7d9f8c5b4-new22   1/1     Running   0          25s
+chaos-target-app-7d9f8c5b4-new33   1/1     Running   0          25s
+```
+
+**What you'll see in Terminal 2:**
+```
+MEASURING MTTR: BASELINE
+============================================================
+>> Deploying unstable version...
+>> Waiting for bad deployment to stabilize...
+>> Executing rollback command...
+>> Waiting for rollout to succeed...
+>> Cleaning up chaos artifacts...
+>> SUCCESS: Rollback took 38.2 seconds
+>> Result saved to chaos_results.json
+```
+
+**What just happened:** The script deployed the broken version, immediately rolled it back, and measured that it took 38.2 seconds to recover. This is your baseline.
+
+---
+
+**Wait 30 seconds for cluster to fully stabilize, then run test 2:**
+
+```bash
+sleep 30
+python3 scripts/measure-rollback-mttr.py --baseline
+```
+
+**Expected output (Terminal 2):**
+```
+MEASURING MTTR: BASELINE
+============================================================
+>> SUCCESS: Rollback took 39.1 seconds
+>> Result saved to chaos_results.json
+```
+
+---
+
+**Wait and run test 3:**
+
+```bash
+sleep 30
+python3 scripts/measure-rollback-mttr.py --baseline
+```
+
+**Expected output (Terminal 2):**
+```
+MEASURING MTTR: BASELINE
+============================================================
+>> SUCCESS: Rollback took 37.8 seconds
+>> Result saved to chaos_results.json
+```
+
+**What you just collected:** Three baseline measurements. The average will be around 38 seconds, with slight variation.
+
+---
 
 ### Step 3: Run Chaos Tests (With Active Pod Deletion)
 
-Now measure rollback time while chaos actively deletes pods.
+**What this does:** Measures how long rollback takes when pods are being actively deleted by chaos. This simulates a production incident where infrastructure is unstable.
+
+**Terminal 1 should still be running with the watch command.**
+
+**Terminal 2 - Execute Chaos Tests:**
 
 ```bash
-# Run chaos test 3 times
-python3 scripts/measure-rollback-mttr.py --chaos
-sleep 30
-
-python3 scripts/measure-rollback-mttr.py --chaos
-sleep 30
-
+# Run chaos test 1
 python3 scripts/measure-rollback-mttr.py --chaos
 ```
 
-**What to observe in Terminal 2:**
-- Deployment switches to unstable version
-- Argo Workflow launches and begins deleting pods
-- Pods are repeatedly terminated and recreated
-- Rollback command executes during this chaos
-- System fights to stabilize while under attack
-- Eventually reaches stable state despite chaos
+**What you'll see in Terminal 1 (this is dramatic):**
+
+Initial stable state:
+```
+NAME                               READY   STATUS    RESTARTS   AGE
+chaos-target-app-7d9f8c5b4-abc12   1/1     Running   0          1m
+chaos-target-app-7d9f8c5b4-def34   1/1     Running   0          1m
+chaos-target-app-7d9f8c5b4-ghi56   1/1     Running   0          1m
+```
+
+Script deploys unstable version:
+```
+NAME                               READY   STATUS             RESTARTS   AGE
+chaos-target-app-8a2b3c4d5-xyz11   0/1     ImagePullBackOff   0          10s
+chaos-target-app-8a2b3c4d5-xyz22   0/1     ImagePullBackOff   0          10s
+chaos-target-app-8a2b3c4d5-xyz33   0/1     ErrImagePull       0          8s
+```
+
+Chaos workflow starts, begins deleting pods:
+```
+NAME                               READY   STATUS        RESTARTS   AGE
+chaos-target-app-8a2b3c4d5-xyz11   0/1     Terminating   0          20s
+chaos-target-app-8a2b3c4d5-xyz22   0/1     ErrImagePull  0          20s
+chaos-target-app-8a2b3c4d5-xyz33   0/1     ErrImagePull  0          18s
+chaos-target-app-8a2b3c4d5-new44   0/1     Pending       0          1s
+```
+
+Rollback executes WHILE chaos is still running:
+```
+NAME                               READY   STATUS              RESTARTS   AGE
+chaos-target-app-7d9f8c5b4-new11   0/1     ContainerCreating   0          2s
+chaos-target-app-8a2b3c4d5-xyz22   0/1     Terminating         0          25s
+chaos-target-app-7d9f8c5b4-new22   0/1     ContainerCreating   0          2s
+```
+
+Chaos continues deleting, even new pods:
+```
+NAME                               READY   STATUS        RESTARTS   AGE
+chaos-target-app-7d9f8c5b4-new11   1/1     Terminating   0          15s
+chaos-target-app-7d9f8c5b4-new22   1/1     Running       0          15s
+chaos-target-app-7d9f8c5b4-new33   0/1     Pending       0          1s
+```
+
+Finally, chaos stops and system stabilizes:
+```
+NAME                               READY   STATUS    RESTARTS   AGE
+chaos-target-app-7d9f8c5b4-new11   1/1     Running   0          55s
+chaos-target-app-7d9f8c5b4-new22   1/1     Running   0          55s
+chaos-target-app-7d9f8c5b4-new33   1/1     Running   0          40s
+```
+
+**What you'll see in Terminal 2:**
+```
+MEASURING MTTR: WITH-CHAOS
+============================================================
+>> Deploying unstable version...
+>> Waiting for bad deployment to stabilize...
+>> Triggering chaos workflow...
+>> Chaos workflow started. Waiting for chaos to begin...
+>> Executing rollback command...
+>> Waiting for rollout to succeed...
+>> Cleaning up chaos artifacts...
+>> SUCCESS: Rollback took 72.5 seconds
+>> Result saved to chaos_results.json
+```
+
+**Notice:** 72.5 seconds vs 38 seconds baseline! Recovery took almost twice as long under chaos.
+
+**What just happened:** The script deployed the broken version, started chaos (which began deleting pods), then tried to rollback. The rollback command succeeded, but Kubernetes struggled to get all pods healthy because chaos kept deleting them. Eventually chaos stopped and the system recovered.
+
+---
+
+**Wait and run test 2:**
+
+```bash
+sleep 30
+python3 scripts/measure-rollback-mttr.py --chaos
+```
+
+**Expected output:**
+```
+MEASURING MTTR: WITH-CHAOS
+============================================================
+>> SUCCESS: Rollback took 68.9 seconds
+>> Result saved to chaos_results.json
+```
+
+---
+
+**Wait and run test 3:**
+
+```bash
+sleep 30
+python3 scripts/measure-rollback-mttr.py --chaos
+```
+
+**Expected output:**
+```
+MEASURING MTTR: WITH-CHAOS
+============================================================
+>> SUCCESS: Rollback took 75.2 seconds
+>> Result saved to chaos_results.json
+```
+
+**Press Ctrl+C in Terminal 1 to stop watching pods.**
+
+---
 
 ### Step 4: Verify Data Collection
 
 ```bash
-# Check collected results
+# View collected results
 cat chaos_results.json
-
-# Example output:
-# {
-#     "baseline": [38.2, 39.1, 37.8],
-#     "with-chaos": [72.5, 68.9, 75.2]
-# }
 ```
+
+**Expected output:**
+```json
+{
+    "baseline": [
+        38.2,
+        39.1,
+        37.8
+    ],
+    "with-chaos": [
+        72.5,
+        68.9,
+        75.2
+    ]
+}
+```
+
+**What this data shows:**
+- **Baseline average**: ~38 seconds (best case scenario)
+- **Chaos average**: ~72 seconds (realistic failure scenario)
+- **Impact**: Chaos increases recovery time by ~90%
+
+---
 
 ### 💡 SRE Analysis: Statistical Significance
 
@@ -934,6 +1509,8 @@ You executed controlled experiments multiple times to generate a dataset. Runnin
 
 **The Learning Outcome:**
 This demonstrates **Statistical Rigor** in chaos engineering. Distributed systems exhibit variance—network latency fluctuates, scheduling decisions vary, API server response times change. One slow test might be a fluke caused by background processes. Three slow tests indicate a systematic problem.
+
+The data reveals that chaos isn't just "slightly annoying"—it nearly doubles your recovery time. This is the difference between meeting and violating your SLA.
 
 **Real Production Value:**
 When presenting chaos engineering findings to leadership, data quality matters. You cannot justify infrastructure investments by saying "It felt slower during chaos." You justify investments with: "Our tests show that pod instability increases recovery time by 90% (72s vs 38s), which exceeds our 60-second SLA. We need improved health checks and faster pod startup times."
@@ -944,11 +1521,13 @@ Data-driven recommendations get approved. Anecdotal complaints get ignored.
 
 ## Phase 6: Measuring Chaos Impact
 
-In this final phase, you'll analyze the results from your controlled experiments and generate a professional report quantifying chaos impact on system resilience.
+**What we're doing:** Analyzing the test results to generate a professional report quantifying the impact of chaos on system resilience.
+
+**Why this matters:** Raw data (38s, 72s) tells you numbers. Analysis tells you what those numbers mean for your business, your SLAs, and your infrastructure investments.
 
 ### Step 1: Create the Analysis Script
 
-This script processes your test data and calculates key metrics.
+**What this creates:** A script that reads your test data, calculates statistical metrics (mean, standard deviation), and generates actionable recommendations.
 
 ```bash
 cat > scripts/analyze-chaos-impact.py <<'EOF'
@@ -1021,7 +1600,7 @@ def analyze_mttr_results():
     print("2. Improve System Resilience")
     print("   - Tune livenessProbe/readinessProbe for faster failure detection")
     print("   - Optimize container startup time to reduce MTTR")
-    print("   - Consider pod disruption budgets to limit chaos impact")
+    print("   - Consider PodDisruptionBudgets to limit chaos impact")
     
     print()
     print("3. Automate Chaos Testing")
@@ -1043,15 +1622,23 @@ EOF
 chmod +x scripts/analyze-chaos-impact.py
 ```
 
+**What you just created:** An analysis script that:
+- Calculates average (mean) recovery time for each scenario
+- Calculates standard deviation (variability)
+- Computes percentage impact of chaos
+- Generates actionable recommendations based on your data
+
+---
+
 ### Step 2: Generate the Report
 
-Execute the analysis to see your final metrics:
+**What this does:** Processes your test data and displays a professional analysis report.
 
 ```bash
 python3 scripts/analyze-chaos-impact.py
 ```
 
-**Example Output:**
+**Expected output:**
 
 ```
 Chaos Engineering Impact Analysis
@@ -1059,13 +1646,13 @@ Chaos Engineering Impact Analysis
 
 Test Scenario          Avg MTTR    Std Dev    Impact
 ------------------------------------------------------------
-baseline                 38.1s     ±1.2s      +0.0%
-with-chaos               72.4s     ±3.1s     +90.0%
+baseline                 38.4s     ±0.7s      +0.0%
+with-chaos               72.2s     ±3.2s     +88.0%
 
 Key Insights:
-- Baseline rollback time: 38.1s (±1.2s)
-- Active pod deletion increases MTTR by 90.0%
-- Recovery takes an additional 34.3s under chaos
+- Baseline rollback time: 38.4s (±0.7s)
+- Active pod deletion increases MTTR by 88.0%
+- Recovery takes an additional 33.8s under chaos
 
 SRE Recommendations:
 
@@ -1077,7 +1664,7 @@ SRE Recommendations:
 2. Improve System Resilience
    - Tune livenessProbe/readinessProbe for faster failure detection
    - Optimize container startup time to reduce MTTR
-   - Consider pod disruption budgets to limit chaos impact
+   - Consider PodDisruptionBudgets to limit chaos impact
 
 3. Automate Chaos Testing
    - Schedule these workflows weekly in staging environments
@@ -1089,6 +1676,35 @@ SRE Recommendations:
    - Use this data during post-incident reviews
    - Present findings to leadership for infrastructure investments
 ```
+
+---
+
+### Understanding the Report
+
+**Test Scenario Table:**
+- **baseline**: Tests without chaos (perfect conditions)
+- **with-chaos**: Tests with active pod deletion
+- **Avg MTTR**: Average recovery time across 3 tests
+- **Std Dev**: Variability (±0.7s means tests were very consistent, ±3.2s means more variation under chaos)
+- **Impact**: Percentage increase compared to baseline
+
+**Key Insights:**
+- Your baseline is 38.4 seconds—this is what you'd promise if you ignored chaos
+- Chaos increases recovery time by 88%—nearly double
+- You lose 33.8 extra seconds when infrastructure is unstable
+
+**SRE Recommendations:**
+These aren't generic advice—they're based on YOUR actual test results.
+
+**Recommendation 1** says: Don't promise 60-second SLA based on 38s baseline. Your chaos tests show you need 72s, so promise 87s (with buffer).
+
+**Recommendation 2** points to specific improvements that would reduce MTTR.
+
+**Recommendation 3** explains how to operationalize this testing.
+
+**Recommendation 4** shows how to use this data in your organization.
+
+---
 
 ### 💡 SRE Analysis: From Data to Action
 
@@ -1108,16 +1724,22 @@ This analysis directly informs business decisions. Consider these scenarios:
 Your contract promises customers "Recovery within 60 seconds for any bad deployment." Your baseline test (38s) suggests this is safe. But your chaos test (72s) proves you'll violate that SLA during real incidents. This analysis prevents costly contract violations.
 
 **Scenario B: Justifying Infrastructure Investment**
-You want to implement PodDisruptionBudgets to limit chaos impact, but leadership questions the value. You present this data: "Pod instability increases our recovery time by 90%. PodDisruptionBudgets will reduce that to 30%, keeping us within our SLA commitments." Data-backed proposals get approved.
+You want to implement PodDisruptionBudgets to limit chaos impact, but leadership questions the value. You present this data: "Pod instability increases our recovery time by 88%. PodDisruptionBudgets will reduce that to 30%, keeping us within our SLA commitments." Data-backed proposals get approved.
 
 **Scenario C: Continuous Improvement**
 After implementing improvements (better health checks, faster startup), you re-run these tests and prove recovery time decreased from 72s to 55s. You've quantified the value of your engineering work.
+
+**Scenario D: Post-Incident Reviews**
+During a real production incident, rollback took 65 seconds. Is that good or bad? Your chaos test data shows: "That's actually better than our 72s chaos test average, meaning our runbook performed well under realistic pressure."
+
+**The Bottom Line:**
+This isn't just an academic exercise. This is how production SREs validate their disaster recovery procedures and prove to leadership that their systems are ready for real incidents.
 
 ---
 
 ## Cleanup
 
-Once you've completed the experiment and collected your data, clean up all resources.
+**What this does:** Removes all resources created during this lab to return your cluster to its original state.
 
 ```bash
 # Remove application deployments
@@ -1129,6 +1751,7 @@ kubectl delete -f manifests/chaos/ --ignore-not-found
 kubectl delete workflow --all -n litmus
 kubectl delete chaosengine --all -n litmus
 kubectl delete chaosexperiment --all -n litmus
+kubectl delete chaosresult --all -n litmus
 
 # Remove application namespace
 kubectl delete namespace chaos-app
@@ -1140,11 +1763,31 @@ kubectl delete namespace argo
 echo "Cleanup completed successfully"
 ```
 
+**Expected output:**
+```
+configmap "app-content" deleted
+deployment.apps "chaos-target-app" deleted
+service "chaos-target-service" deleted
+...
+namespace "chaos-app" deleted
+namespace "litmus" deleted
+namespace "argo" deleted
+Cleanup completed successfully
+```
+
+**Verify cleanup:**
+```bash
+# Should show no pods in these namespaces
+kubectl get pods -n chaos-app
+kubectl get pods -n litmus
+kubectl get pods -n argo
+```
+
 ---
 
 ## Commit Your Work
 
-Document your complete chaos engineering implementation in Git.
+**What this does:** Saves all your work to Git so you can share it, revisit it, or use it as a reference for future chaos engineering work.
 
 ```bash
 # Stage all files
@@ -1153,10 +1796,12 @@ git add .
 # Commit with descriptive message
 git commit -m "Complete chaos engineering lab with LitmusChaos 3.x and Argo Workflows
 
-- Implemented workflow-based chaos experiments
+- Implemented workflow-based chaos experiments using modern architecture
+- Used dedicated namespaces (chaos-app for application, litmus for infrastructure)
+- Configured cross-namespace RBAC for secure chaos execution
 - Measured MTTR under baseline and chaos conditions
-- Generated quantitative resilience metrics
-- Documented findings and SRE recommendations"
+- Generated quantitative resilience metrics with statistical analysis
+- Documented production-ready patterns and SRE recommendations"
 
 # Push to remote
 git push origin main
