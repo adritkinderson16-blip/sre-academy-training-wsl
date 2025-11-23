@@ -822,31 +822,79 @@ EOF
 
 ### Step 2: Execute and Observe
 
-**What we're doing:** Actually running the workflow to see chaos in action. This is when pods start getting deleted.
+**What we're doing:** Running the workflow to see chaos in action while simultaneously proving that the application remains available to users. This is when pods start getting deleted, but the service stays up.
 
-**Important:** You need THREE terminal windows open for this section. Arrange them so you can see all three at once.
+**Important:** You need **FIVE terminal windows** open for this section, plus a web browser. Arrange them so you can see everything at once.
 
-**Terminal 1 - Application Pods (chaos-app namespace):**
+---
+
+**Terminal 1 - Get Service URL:**
+```bash
+# Get the URL for your application
+minikube service chaos-target-service -n chaos-app --url
+```
+
+**Expected output:**
+```
+http://127.0.0.1:55741
+```
+
+**Copy this URL** - you'll need it for Terminal 2 and your browser.
+
+---
+
+**Terminal 2 - Continuous Availability Monitoring (User Simulation):**
+
+This simulates a user constantly accessing your application. It will prove the service stays up during chaos.
+```bash
+# Replace with YOUR actual URL from Terminal 1
+URL="http://127.0.0.1:55741"
+
+# Hit the service every 0.5 seconds and show timestamp + HTTP status
+while true; do
+  TIMESTAMP=$(date '+%H:%M:%S')
+  RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$URL" --max-time 2)
+  if [ "$RESPONSE" = "200" ]; then
+    echo "[$TIMESTAMP] ✅ Service UP - HTTP $RESPONSE"
+  else
+    echo "[$TIMESTAMP] ❌ Service DOWN - HTTP $RESPONSE"
+  fi
+  sleep 0.5
+done
+```
+
+**What you'll see:** A continuous stream of timestamps showing the service is responding:
+```
+[10:35:53] ✅ Service UP - HTTP 200
+[10:35:54] ✅ Service UP - HTTP 200
+[10:35:55] ✅ Service UP - HTTP 200
+```
+
+This will keep running throughout the chaos experiment. **Watch for any ❌ symbols** - those indicate brief moments when the service was unavailable.
+
+---
+
+**Terminal 3 - Application Pods (chaos-app namespace):**
 ```bash
 # Watch your application pods (these will be deleted by chaos)
-watch kubectl get pods -n chaos-app -l app=chaos-target-app
+watch -n 0.5 kubectl get pods -n chaos-app -l app=chaos-target-app
 ```
 
 **What you'll see:** Your three application pods running normally, then every 10 seconds some will be deleted and recreated.
 
 ---
 
-**Terminal 2 - Chaos Infrastructure (litmus namespace):**
+**Terminal 4 - Chaos Infrastructure (litmus namespace):**
 ```bash
 # Watch chaos-related pods (these execute the chaos)
-watch kubectl get pods -n litmus
+watch -n 0.5 kubectl get pods -n litmus
 ```
 
 **What you'll see:** Workflow pods being created to execute each step, and a chaos-runner pod that actually deletes your application pods.
 
 ---
 
-**Terminal 3 - Execute the Workflow:**
+**Terminal 5 - Execute the Workflow:**
 ```bash
 # Submit the workflow to Argo
 kubectl create -f manifests/chaos/pod-delete-workflow.yaml
@@ -866,57 +914,91 @@ pod-delete-chaos-experiment   Succeeded 60s
 
 ---
 
+**Web Browser - Visual Confirmation:**
+
+1. **Open the URL** from Terminal 1 in your web browser: `http://127.0.0.1:xxxxx`
+2. **Keep the browser window visible** alongside your terminals
+3. **Manually refresh** the page every few seconds during chaos (or use a browser auto-refresh extension)
+
+**What you'll see:** The webpage continues to load successfully, displaying "Status: STABLE" throughout the chaos experiment. This is visual proof that end users experience zero downtime.
+
+---
+
 ### What Happens (Step by Step)
 
 **T=0s - You run kubectl create:**
 - Workflow resource is created in Kubernetes
 - Argo Workflow Controller sees the new workflow
+- **Terminal 2 continues showing ✅ Service UP**
 
 **T=1s - Step 1 begins:**
 - Argo creates a pod named `pod-delete-chaos-experiment-install-xyz`
-- **In Terminal 2**, you'll see this pod appear
+- **In Terminal 4**, you'll see this pod appear
 - This pod runs `kubectl apply -f /tmp/pod-delete.yaml`
 - A ChaosExperiment resource is created
+- **Terminal 2 still shows ✅ Service UP**
 
 **T=5s - Step 1 completes, Step 2 begins:**
 - Argo creates a pod named `pod-delete-chaos-experiment-run-xyz`
-- **In Terminal 2**, you'll see this pod appear
+- **In Terminal 4**, you'll see this pod appear
 - This pod runs `kubectl apply -f /tmp/chaosengine.yaml`
 - A ChaosEngine resource is created
 
 **T=10s - LitmusChaos Operator springs into action:**
 - The operator sees the new ChaosEngine
 - It creates a chaos-runner pod: `pod-delete-engine-runner-xyz`
-- **In Terminal 2**, you'll see the runner pod appear
-- **In Terminal 1**, you'll see your application pods start getting deleted!
+- **In Terminal 4**, you'll see the runner pod appear
+- **In Terminal 3**, you'll see your application pods start getting deleted!
+- **In Terminal 2**, you'll notice it **still shows ✅ Service UP** - this is the critical observation!
 
 **T=10s-40s - Active chaos period:**
 Every 10 seconds, the chaos-runner:
 - Finds all pods with label `app=chaos-target-app` in namespace `chaos-app`
 - Deletes 50% of them (about 1-2 pods)
-- **In Terminal 1**, you'll see:
+- **In Terminal 3**, you'll see:
   - Pods transition from Running → Terminating → (disappear)
   - New pods appear with status ContainerCreating → Running
   - This happens multiple times (every 10 seconds for 30 seconds = 3 times)
+- **In Terminal 2**, you'll see mostly ✅ (maybe 1-2 brief ❌ during transitions)
+- **In your browser**, the page keeps loading successfully
 
 **T=50s - Step 2 completes, Step 3 begins:**
 - Argo creates a cleanup pod
 - This pod deletes the ChaosEngine and ChaosExperiment
-- **In Terminal 2**, you'll see the runner pod disappear
+- **In Terminal 4**, you'll see the runner pod disappear
+- **Terminal 2 never stopped showing ✅**
 
 **T=60s - Workflow completes:**
-- **Terminal 3** shows workflow status: Succeeded
-- **Terminal 1** shows your application pods all running normally again
-- **Terminal 2** shows only the chaos-operator-ce pod remaining
+- **Terminal 5** shows workflow status: Succeeded
+- **Terminal 3** shows your application pods all running normally again
+- **Terminal 4** shows only the chaos-operator-ce pod remaining
+- **Terminal 2 shows uninterrupted ✅ Service UP** throughout the entire experiment
+
+---
+
+### The Critical Observation
+
+**Look at Terminal 2 during the entire experiment.** Even while chaos was forcefully deleting pods in Terminal 3, Terminal 2 should show continuous availability:
+```
+[10:35:53] ✅ Service UP - HTTP 200
+[10:35:54] ✅ Service UP - HTTP 200
+[10:35:55] ✅ Service UP - HTTP 200  ← Chaos starts deleting pods
+[10:35:56] ✅ Service UP - HTTP 200  ← Pods being terminated
+[10:35:57] ✅ Service UP - HTTP 200  ← New pods being created
+[10:35:58] ✅ Service UP - HTTP 200  ← More deletions happening
+[10:36:00] ✅ Service UP - HTTP 200  ← Chaos still active
+[10:36:03] ✅ Service UP - HTTP 200  ← Chaos completes
+```
+
+**This proves:** Individual pods can fail catastrophically, yet the service remains available to users. This is the fundamental principle of chaos engineering and cloud-native resilience.
 
 ---
 
 ### Verify Results
 
-**Press Ctrl+C in all terminals to stop watching.**
+**Press Ctrl+C in Terminals 2, 3, 4, and 5 to stop watching.**
 
 Now let's examine what happened:
-
 ```bash
 # Check if ChaosEngine still exists (it should be deleted)
 kubectl get chaosengine -n litmus
@@ -930,7 +1012,6 @@ No resources found in litmus namespace.
 **What this means:** The cleanup step successfully deleted the ChaosEngine.
 
 ---
-
 ```bash
 # Check ChaosResult (this persists for audit trail)
 kubectl get chaosresult -n litmus
@@ -945,7 +1026,6 @@ pod-delete-engine-pod-delete    2m
 **What this means:** A ChaosResult was created to record what happened during the experiment.
 
 ---
-
 ```bash
 # View detailed results
 kubectl describe chaosresult pod-delete-engine-pod-delete -n litmus
@@ -957,7 +1037,6 @@ kubectl describe chaosresult pod-delete-engine-pod-delete -n litmus
 - `Total Chaos Duration` (how long chaos ran)
 
 ---
-
 ```bash
 # View events showing pod deletions
 kubectl get events -n chaos-app --sort-by='.lastTimestamp' | grep -i "delete"
@@ -1012,6 +1091,9 @@ The workflow approach means your chaos practices scale from a single engineer's 
 - **LitmusChaos Portal**: Heavy installation, overkill for learning
 
 Argo Workflows is the production standard for orchestrating Kubernetes-based workflows, not just for chaos engineering but also for ML pipelines, data processing, and complex deployments.
+
+**Zero-Downtime Validation:**
+The continuous availability monitoring (Terminal 2) proved that even while chaos forcefully deleted 67% of your pods over 30 seconds, your application remained accessible to users. This validates that your deployment configuration (replicas: 3, health probes, resource limits) is production-ready and can survive infrastructure failures without service interruption.
 
 ---
 
