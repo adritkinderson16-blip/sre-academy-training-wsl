@@ -2219,73 +2219,34 @@ This isn't just an academic exercise. This is how production SREs validate their
 
 ## Cleanup
 
-**What this does:** Removes all resources created during this lab to return your cluster to its original state.
+**What we're doing:** Complete teardown of the chaos engineering environment. Since this is the final exercise in the SRE Academy, we'll perform a full cleanup that removes all Kubernetes resources and the Minikube cluster itself.
+
+---
+
+### Complete Teardown
+
+If you're completely done with the SRE Academy exercises and want to reclaim all resources:
 
 ```bash
-# Remove application deployments
-kubectl delete -f manifests/stable/ --ignore-not-found
-kubectl delete -f manifests/unstable/ --ignore-not-found
+# Delete the entire Minikube cluster
+minikube delete
 
-# Remove chaos artifacts
-kubectl delete -f manifests/chaos/ --ignore-not-found
-kubectl delete workflow --all -n litmus
-kubectl delete chaosengine --all -n litmus
-kubectl delete chaosexperiment --all -n litmus
-kubectl delete chaosresult --all -n litmus
-
-# Remove application namespace
-kubectl delete namespace chaos-app
-
-# Optional: Remove entire chaos engineering stack
-kubectl delete namespace litmus
-kubectl delete namespace argo
-
-echo "Cleanup completed successfully"
+# Verify deletion
+minikube status
 ```
 
 **Expected output:**
 ```
-configmap "app-content" deleted
-deployment.apps "chaos-target-app" deleted
-service "chaos-target-service" deleted
-...
-namespace "chaos-app" deleted
-namespace "litmus" deleted
-namespace "argo" deleted
-Cleanup completed successfully
+🤷  Profile "minikube" not found. Run "minikube profile list" to view all profiles.
 ```
 
-**Verify cleanup:**
-```bash
-# Should show no pods in these namespaces
-kubectl get pods -n chaos-app
-kubectl get pods -n litmus
-kubectl get pods -n argo
-```
+**What this removes:**
+- ✅ All Kubernetes resources (pods, deployments, services, namespaces)
+- ✅ All Docker images stored in Minikube
+- ✅ Virtual machine used by Minikube
+- ✅ Kubernetes configuration (~/.kube/config entries for minikube)
 
----
-
-## Commit Your Work
-
-**What this does:** Saves all your work to Git so you can share it, revisit it, or use it as a reference for future chaos engineering work.
-
-```bash
-# Stage all files
-git add .
-
-# Commit with descriptive message
-git commit -m "Complete chaos engineering lab with LitmusChaos 3.x and Argo Workflows
-
-- Implemented workflow-based chaos experiments using modern architecture
-- Used dedicated namespaces (chaos-app for application, litmus for infrastructure)
-- Configured cross-namespace RBAC for secure chaos execution
-- Measured MTTR under baseline and chaos conditions
-- Generated quantitative resilience metrics with statistical analysis
-- Documented production-ready patterns and SRE recommendations"
-
-# Push to remote
-git push origin main
-```
+**Disk space reclaimed:** Approximately 2-4 GB depending on your usage.
 
 ---
 
