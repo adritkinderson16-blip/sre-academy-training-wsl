@@ -790,7 +790,7 @@ spec:
           - |
             kubectl apply -f /tmp/chaosengine.yaml -n {{workflow.parameters.adminModeNamespace}}
             echo "Waiting for chaos to complete..."
-            sleep 40
+            sleep 50
             kubectl get chaosresult -n {{workflow.parameters.adminModeNamespace}}
 
     # Step 3: Cleanup
