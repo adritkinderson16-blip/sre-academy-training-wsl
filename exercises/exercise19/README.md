@@ -574,7 +574,7 @@ rules:
     resources: ["pods/log"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
-    resources: ["deployments", "statefulsets", "daemonsets"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["batch"]
     resources: ["jobs"]
@@ -598,6 +598,7 @@ subjects:
     namespace: litmus
 EOF
 
+# Apply the RBAC
 kubectl apply -f manifests/chaos/argo-chaos-rbac.yaml
 ```
 
