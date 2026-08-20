@@ -124,15 +124,15 @@ docker version
 ### Step 4 – Install kubectl (Official Repo)
 
 ```bash
-sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg \
-  https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key \
+  | sudo gpg --dearmor --yes \
+      -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
-echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] \
-  https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /" \
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
 
 sudo apt-get update
-sudo apt-get install -y kubectl
+sudo apt-get install -y kubectl=1.35.1-1.1
 kubectl version --client
 ```
 
