@@ -31,12 +31,14 @@
 
 Infrastructure as Code (IaC) is the practice of defining infrastructure—like servers, packages, clusters, and services—in machine-readable configuration files. This allows engineers to automate environment setup, enforce consistency across systems, and apply the same rigor of versioning and testing to infrastructure as they do to software development.
 
+![iac-architecture](./iac-architecture.png)
+
 ### Why is IaC Important?
 
 * **Consistency**: Prevents "configuration drift" between environments.
 * **Speed**: Automates repetitive tasks and reduces human error.
 * **Scalability**: Makes it easier to scale systems up or down on demand.
-* **Traceability**: All changes can be tracked using Git or other version control systems.
+* **Traceability**: All changes can be tracked using Git or other version control systems (VCS).
 
 ---
 
@@ -50,6 +52,60 @@ Ansible is a simple, agentless automation engine that lets you define and enforc
 * **Idempotent**: Running the same playbook multiple times won’t cause unexpected results.
 * **Human-Readable**: Uses YAML for easy-to-read and write automation tasks.
 
+### Ansible Core Concepts
+
+Everything in Ansible revolves around these five core concepts:
+
+* **Control Node** → The Mastermind
+* **Inventory** → Hosts that need our changes
+* **Playbook** → Changes we want to do
+* **Connection Plugin** → How to connect?
+* **Module** → What action to perform?
+* **Managed Host** → Where to execute?
+
+### End-to-End Workflow
+
+```
+┌─────────┐
+│  User   │
+└────┬────┘
+     │ ansible-playbook
+     ▼
+┌────────────────────┐
+│  Ansible Control   │
+│       Node         │
+└────┬───────────────┘
+     │
+     ├─ Read Inventory
+     ├─ Read Playbook
+     ├─ Load Modules
+     └─ Load Plugins
+     │
+     ▼
+┌────────────────────┐
+│ Connection Plugin  │
+│      (SSH)         │
+└────┬───────────────┘
+     │
+     ├────► Server 1
+     ├────► Server 2
+     └────► Server 3
+                │
+                ▼
+        Package Module
+                │
+                ▼
+      Install httpd
+                │
+                ▼
+        Return Results
+                │
+                ▼
+      Callback Plugin
+                │
+                ▼
+         User Output
+```
 ---
 
 ## Navigate to the Exercise Directory
