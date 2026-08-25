@@ -63,6 +63,8 @@ Everything in Ansible revolves around these five core concepts:
 * **Module** → What action to perform?
 * **Managed Host** → Where to execute?
 
+![ansible-architecture](./ansible-architecture.png)
+
 ### End-to-End Workflow
 
 ```
@@ -113,7 +115,7 @@ Everything in Ansible revolves around these five core concepts:
 Before you begin, navigate to the correct directory for this exercise:
 
 ```bash
-cd sre-academy-training/exercises/exercise4.1
+cd sre-academy-training/exercises/exercise4.1/ansible_quickstart/
 ```
 
 This folder contains:
@@ -126,7 +128,7 @@ This folder contains:
 
 ## Getting Started with Ansible
 
-Ansible should already be installed using `pipx` as described in the [Tool Installation Guide](../exercise4/installation.md).
+Ansible should already be installed as described in the [Tool Installation Guide](../exercise4/installation.md).
 
 You can confirm it is working by checking the version:
 

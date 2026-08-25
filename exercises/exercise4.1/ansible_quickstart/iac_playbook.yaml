@@ -1,9 +1,10 @@
 ---
-- name: Install Minikube with Podman on macOS and Linux
+- name: Install Minikube with Docker on macOS and Linux
   hosts: all
+
   tasks:
     - name: Install dependencies on Debian/Ubuntu
-      apt:
+      ansible.builtin.apt:
         name:
           - curl
           - apt-transport-https
@@ -11,52 +12,52 @@
           - software-properties-common
           - conntrack
         state: present
-      become: yes
+      become: true
       when: ansible_os_family == "Debian"
 
-    - name: Install dependencies on macOS
-      homebrew:
-        name:
-          - curl
+    - name: Install Docker on Debian/Ubuntu
+      ansible.builtin.apt:
+        name: docker.io
         state: present
-      when: ansible_os_family == "Darwin"
-
-    - name: Install Podman on Debian/Ubuntu
-      apt:
-        name: podman
-        state: present
-      become: yes
+      become: true
       when: ansible_os_family == "Debian"
 
-    - name: Install Podman on macOS
-      homebrew:
-        name: podman
+    - name: Start and enable Docker on Debian/Ubuntu
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+      become: true
+      when: ansible_os_family == "Debian"
+
+    - name: Install Docker on macOS
+      community.general.homebrew:
+        name: docker
         state: present
       when: ansible_os_family == "Darwin"
 
     - name: Download Minikube binary for macOS
-      get_url:
-        url: https://storage.googleapis.com/minikube/releases/latest/minikube-darwin-amd64
+      ansible.builtin.get_url:
+        url: https://storage.googleapis.com/minikube/releases/latest/minikube-darwin-arm64
         dest: /usr/local/bin/minikube
-        mode: '0755'
-        validate_certs: no
-      become: yes
+        mode: "0755"
+      become: true
       when: ansible_os_family == "Darwin"
 
     - name: Download Minikube binary for Linux
-      get_url:
+      ansible.builtin.get_url:
         url: https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
         dest: /usr/local/bin/minikube
-        mode: '0755'
-      become: yes
+        mode: "0755"
+      become: true
       when: ansible_os_family == "Debian"
 
-    - name: Start Minikube with Podman
-      command: minikube start --driver=podman
+    - name: Start Minikube with Docker
+      ansible.builtin.command:
+        cmd: minikube start --driver=docker
       register: minikube_start
       changed_when: "'Done' in minikube_start.stdout"
-      ignore_errors: yes
 
     - name: Display Minikube start status
-      debug:
+      ansible.builtin.debug:
         var: minikube_start.stdout

@@ -1,5 +1,24 @@
 # Tool Installation Guide for SRE Academy
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Tools You Will Install](#tools-you-will-install)
+- [macOS Users](#macos-users)
+  - [Step 1 – Install Homebrew](#step-1--install-homebrew)
+  - [Step 2 – Install Required Tools](#step-2--install-required-tools)
+  - [Step 3 – Start Colima](#step-3--start-colima)
+- [Windows Users (WSL2 + Ubuntu)](#windows-users-wsl2--ubuntu)
+  - [Step 1 – Enable WSL2](#step-1--enable-wsl2)
+  - [Step 2 – Enable systemd in WSL2](#step-2--enable-systemd-in-wsl2)
+  - [Step 3 – Install Docker Engine (Official Repo)](#step-3--install-docker-engine-official-repo)
+  - [Step 4 – Install kubectl (Official Repo)](#step-4--install-kubectl-official-repo)
+  - [Step 5 – Install Minikube (Official Binary)](#step-5--install-minikube-official-binary)
+  - [Step 6 – Install Python, pip, venv, pipx, and Ansible](#step-6--install-python-pip-venv-pipx-and-ansible)
+- [Starting Minikube](#starting-minikube)
+- [Verification](#verification)
+- [Final Notes](#final-notes)
+
 ## Overview
 
 This guide will walk you through installing all the required tools for **Exercises 1–19** in the SRE Academy.
@@ -36,6 +55,7 @@ brew --version
 
 ```bash
 brew install python
+brew install ansible
 brew install colima
 brew install docker
 brew install minikube
