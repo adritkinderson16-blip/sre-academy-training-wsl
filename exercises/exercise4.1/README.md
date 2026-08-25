@@ -31,12 +31,14 @@
 
 Infrastructure as Code (IaC) is the practice of defining infrastructure—like servers, packages, clusters, and services—in machine-readable configuration files. This allows engineers to automate environment setup, enforce consistency across systems, and apply the same rigor of versioning and testing to infrastructure as they do to software development.
 
+![iac-architecture](./iac-architecture.png)
+
 ### Why is IaC Important?
 
 * **Consistency**: Prevents "configuration drift" between environments.
 * **Speed**: Automates repetitive tasks and reduces human error.
 * **Scalability**: Makes it easier to scale systems up or down on demand.
-* **Traceability**: All changes can be tracked using Git or other version control systems.
+* **Traceability**: All changes can be tracked using Git or other version control systems (VCS).
 
 ---
 
@@ -50,6 +52,60 @@ Ansible is a simple, agentless automation engine that lets you define and enforc
 * **Idempotent**: Running the same playbook multiple times won’t cause unexpected results.
 * **Human-Readable**: Uses YAML for easy-to-read and write automation tasks.
 
+### Ansible Core Concepts
+
+Everything in Ansible revolves around these five core concepts:
+
+* **Control Node** → The Mastermind
+* **Inventory** → Hosts that need our changes
+* **Playbook** → Changes we want to do
+* **Connection Plugin** → How to connect?
+* **Module** → What action to perform?
+* **Managed Host** → Where to execute?
+
+![ansible-architecture](./ansible-architecture.png)
+
+### End-to-End Workflow
+
+```
+┌─────────┐
+│  User   │
+└────┬────┘
+     │ ansible-playbook
+     ▼
+┌────────────────────┐
+│  Ansible Control   │
+│       Node         │
+└────┬───────────────┘
+     │
+     ├─ Read Inventory
+     ├─ Read Playbook
+     ├─ Load Modules
+     └─ Load Plugins
+     │
+     ▼
+┌────────────────────┐
+│ Connection Plugin  │
+│      (SSH)         │
+└────┬───────────────┘
+     │
+     └────► Server X
+                │
+                ▼
+              Module
+                │
+                ▼
+              Tasks
+                │
+                ▼
+        Return Results
+                │
+                ▼
+      Callback Plugin
+                │
+                ▼
+         User Output
+```
 ---
 
 ## Navigate to the Exercise Directory
@@ -57,7 +113,7 @@ Ansible is a simple, agentless automation engine that lets you define and enforc
 Before you begin, navigate to the correct directory for this exercise:
 
 ```bash
-cd sre-academy-training/exercises/exercise4.1
+cd sre-academy-training/exercises/exercise4.1/ansible_quickstart/
 ```
 
 This folder contains:
@@ -70,7 +126,7 @@ This folder contains:
 
 ## Getting Started with Ansible
 
-Ansible should already be installed using `pipx` as described in the [Tool Installation Guide](../exercise4/installation.md).
+Ansible should already be installed as described in the [Tool Installation Guide](../exercise4/installation.md).
 
 You can confirm it is working by checking the version:
 
