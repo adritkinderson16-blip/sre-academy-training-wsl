@@ -89,15 +89,13 @@ Everything in Ansible revolves around these five core concepts:
 │      (SSH)         │
 └────┬───────────────┘
      │
-     ├────► Server 1
-     ├────► Server 2
-     └────► Server 3
+     └────► Server X
                 │
                 ▼
-        Package Module
+              Module
                 │
                 ▼
-      Install httpd
+              Tasks
                 │
                 ▼
         Return Results
