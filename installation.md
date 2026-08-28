@@ -15,6 +15,7 @@
   - [Step 4 – Install kubectl (Official Repo)](#step-4--install-kubectl-official-repo)
   - [Step 5 – Install Minikube (Official Binary)](#step-5--install-minikube-official-binary)
   - [Step 6 – Install Python, pip, venv, pipx, and Ansible](#step-6--install-python-pip-venv-pipx-and-ansible)
+  - [Step 7 – Install Git](#step-7--install-git)
 - [Starting Minikube](#starting-minikube)
 - [Verification](#verification)
 - [Final Notes](#final-notes)
@@ -60,6 +61,7 @@ brew install colima
 brew install docker
 brew install minikube
 brew install kubectl
+brew install git
 ```
 
 ### Step 3 – Start Colima
@@ -179,6 +181,14 @@ ansible --version
 
 ---
 
+### Step 7 – Install Git
+
+```bash
+sudo apt install git
+```
+
+---
+
 ## Starting Minikube
 
 On both macOS and Windows/WSL2:
@@ -201,6 +211,7 @@ docker --version
 minikube version
 kubectl version --client
 ansible --version
+git --version
 ```
 
 ---
@@ -210,6 +221,5 @@ ansible --version
 * **macOS users** use `colima` to simulate a Docker environment.
 * **Windows users** use `WSL2 + Ubuntu + Docker Engine`.
 * All Minikube commands use the **Docker driver** (`--driver=docker`).
-* You are now ready to start **Exercise 1**.
 
 ---

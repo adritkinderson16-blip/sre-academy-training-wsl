@@ -142,13 +142,23 @@ The `service.yaml` exposes the application using a NodePort.
 
 ### Steps to Deploy
 
-1. Apply the Deployment:
+1. Edit the Deployment and set the image created in [exercise 3](../exercise3/README.md).
+
+   Example:
+   ```bash
+   # Instead of
+   image: username/my-python-app:latest
+   # Set
+   image: johndoe/my-python-app:latest
+   ```
+
+3. Apply the Deployment:
 
    ```bash
    kubectl apply -f deployment.yaml
    ```
 
-2. **Verify the Pods (Initial State):**
+4. **Verify the Pods (Initial State):**
 
    After applying the deployment, the Kubernetes cluster will start pulling the image and creating the pods. This process can take up to **1–2 minutes** depending on your network speed.
 
@@ -161,13 +171,13 @@ The `service.yaml` exposes the application using a NodePort.
    You should see your `sre-abc-training-app` pods in a `ContainerCreating` or `Pending` status initially.
    **Wait until all three pods show `1/1` in the `READY` column and `Running` in the `STATUS` column** before moving to the next step. You may need to run this command multiple times.
 
-3. Apply the Service:
+5. Apply the Service:
 
    ```bash
    kubectl apply -f service.yaml
    ```
 
-4. Verify the Service:
+6. Verify the Service:
 
    ```bash
    kubectl get service sre-abc-training-service

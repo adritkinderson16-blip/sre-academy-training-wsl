@@ -59,6 +59,8 @@ Prometheus consists of:
 
 ![Infra](Infra.png)
 
+![prometheus-architecture](./prometheus-architecture.webp)
+
 ---
 
 ## **Use Cases**
@@ -70,7 +72,7 @@ Prometheus consists of:
 
 ---
 
-## **Traditional Installation (Reference)**
+## **Traditional Installation (Just for Reference)**
 
 Although not required for this exercise, Prometheus can be installed locally using Homebrew:
 

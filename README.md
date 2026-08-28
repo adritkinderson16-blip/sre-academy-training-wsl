@@ -16,32 +16,11 @@ Before working on any exercise or topic, make sure to set up the required tools.
 
 You’ll find instructions to install Python, Docker, Colima, Minikube, kubectl, and other essentials depending on your operating system.
 
-Once your environment is ready, get the repository onto your machine using one of the following options:
+👉 **[Clone the repository](./repo_clone.md)**
 
-### Option 1: Download as a ZIP File (Recommended for Students)
+Once your environment is ready, get the repository onto your machine.
 
-This is the simplest method and does not require Git configuration or tokens.
-
-1. Navigate to the repository: `https://github.ibm.com/SRE-Academy/sre-academy-training.git`
-2. Click the green "**Code**" button.
-3. Select "**Download ZIP**".
-4. Extract the ZIP to your preferred location.
-5. Open your terminal and navigate to the extracted folder:
-
-   ```bash
-   cd /path/to/extracted/sre-academy-training-main
-   ```
-
-> ⚠️ The folder name may include `-main` or a commit hash.
-
-### Option 2: Clone the Repository (Requires Git Setup & Token/SSH)
-
-```bash
-git clone https://github.ibm.com/SRE-Academy/sre-academy-training.git
-cd sre-academy-training
-```
-
-> 🔐 You must be logged into [https://github.ibm.com](https://github.ibm.com) with your IBM w3id to access the repository.
+👉 You are now ready to start
 
 ---
 
