@@ -4,11 +4,11 @@
 
 - [Learning Objectives](#learning-objectives)
 - [Navigate to the Directory](#navigate-to-the-directory)
-- [Part 1: Deploy Infrastructure (10 minutes)](#part-1-deploy-infrastructure-10-minutes)
+- [Part 1: Deploy Infrastructure](#part-1-deploy-infrastructure)
 - [Part 2: Configure AWX Project and Runbook](#part-2-configure-awx-project-and-runbook)
-- [Part 3: API Integration Setup (10 minutes)](#part-3-api-integration-setup-10-minutes)
-- [Part 4: Configure Grafana Alerting (15 minutes)](#part-4-configure-grafana-alerting-15-minutes)
-- [Part 5: Test End-to-End Automation (10 minutes)](#part-5-test-end-to-end-automation-10-minutes)
+- [Part 3: API Integration Setup](#part-3-api-integration-setup)
+- [Part 4: Configure Grafana Alerting](#part-4-configure-grafana-alerting)
+- [Part 5: Test End-to-End Automation](#part-5-test-end-to-end-automation)
 - [Troubleshooting](#troubleshooting)
 - [Final Objective](#final-objective)
 - [Next Steps](#next-steps)
@@ -21,7 +21,7 @@ By the end of this exercise, you will:
 
 - Understand automated runbook execution concepts
 - Deploy AWX in a Kubernetes environment
-- Create and execute Ansible runbooks via AWX
+- Create and execute Ansible runbooks through AWX
 - Configure Grafana alerts to trigger AWX jobs automatically
 - Implement end-to-end automated incident response
 
@@ -44,51 +44,99 @@ cd sre-academy-training/exercises/exercise13
 Run the provided script to deploy the complete infrastructure:
 
 ```bash
-./cluster.sh
+./cluster.sh --start
 ```
 
 **What this does:**
 
-- Starts fresh Minikube cluster with increased resources
-- Deploys AWX operator and instance
-- Installs complete observability stack (Prometheus, Grafana, Jaeger, Loki)
-- Deploys sample application for monitoring
+- Starts a fresh Minikube cluster with increased resources
+- Deploys the AWX Operator and AWX instance
+- Installs the observability stack: Prometheus, Grafana, Jaeger, Loki, and OpenTelemetry Collector
+- Deploys the sample application for monitoring
+
+> ⚠️ **Important:** `./cluster.sh --start` is destructive. It deletes existing Minikube profiles before recreating the environment.
 
 ### Step 2: Verify Deployment
 
-Wait for the script to complete, then verify all services are running:
+Wait for the script to complete, then verify that the workloads are running:
 
 ```bash
-# Check all pods are running (should see ~20+ pods across multiple namespaces)
 kubectl get pods -A
+```
 
-# Expected output should show pods like:
-# awx              awx-demo-web-xxx                    3/3     Running
-# awx              awx-demo-task-xxx                   4/4     Running  
-# monitoring       grafana-deployment-xxx              1/1     Running
-# monitoring       prometheus-deployment-xxx           1/1     Running
+Expected output should include pods similar to:
+
+```text
+NAMESPACE       NAME                                      READY   STATUS
+awx             awx-demo-web-xxxxx                       3/3     Running
+awx             awx-demo-task-xxxxx                      4/4     Running
+awx             awx-demo-postgres-15-0                   1/1     Running
+monitoring      grafana-deployment-xxxxx                 1/1     Running
+monitoring      prometheus-deployment-xxxxx              1/1     Running
+opentelemetry   otel-collector-xxxxx                     1/1     Running
+opentelemetry   jaeger-xxxxx                             1/1     Running
+opentelemetry   loki-xxxxx                               1/1     Running
+application     sre-abc-training-app-xxxxx               1/1     Running
+```
+
+If some pods are still in `ContainerCreating`, `Pending`, or `Running` but not fully ready, wait another two or three minutes and run:
+
+```bash
+kubectl get pods -A
 ```
 
 ### Step 3: Extract AWX Credentials
 
-```bash
-# Get AWX admin password (SAVE THIS - you'll need it!)
-kubectl get secret awx-demo-admin-password -o jsonpath="{.data.password}" -n awx | base64 --decode ; echo
+Retrieve the AWX administrator password and save it for later:
 
-# Example output: SmLs6RC0VN9aMKXxPrIpSpD3ujmaBCzp
+```bash
+kubectl get secret awx-demo-admin-password \
+  -n awx \
+  -o jsonpath="{.data.password}" | base64 --decode ; echo
 ```
 
-### Step 4: Access The AWX UI
+AWX administrator credentials:
+
+```text
+Username: admin
+Password: <output from the command above>
+```
+
+### Step 4: Access the AWX UI
+
+Open a **new terminal window** and run:
 
 ```bash
-# Get AWX URL (note this IP:port for later)
 minikube service awx-demo-service -n awx --url
-# Example output: http://127.0.0.1:53331
 ```
 
-> ⚠️ **Common Issues:**
-> - If pods are stuck in `Pending`, wait 2-3 minutes for resources to allocate
-> - If services don't respond, check pod status: `kubectl describe pod <pod-name> -n <namespace>`
+Minikube prints a local URL similar to:
+
+```text
+http://127.0.0.1:53331
+```
+
+Open the printed URL in your browser.
+
+> ⚠️ **Keep the terminal open.** With the Docker driver on macOS and WSL2, Minikube may create a temporary local tunnel. Closing the terminal that runs `minikube service ... --url` can stop access to AWX. Run the command again if you need a new URL.
+
+Log in using:
+
+```text
+Username: admin
+Password: <AWX administrator password from Step 3>
+```
+
+> ⚠️ **Common issues**
+>
+> - If AWX pods are `Pending`, wait two or three minutes for resources to allocate.
+> - If the URL does not respond, verify the AWX workloads:
+>
+>   ```bash
+>   kubectl get pods -n awx
+>   ```
+>
+> - If the terminal running `minikube service ... --url` was closed, run the command again and use the newly printed URL.
 
 ---
 
@@ -96,111 +144,116 @@ minikube service awx-demo-service -n awx --url
 
 ### Step 5: Create AWX Project
 
-1. **Access AWX Web UI** using the URL from Step 4
-2. **Login** with username `admin` and the password from Step 3
-3. **Navigate to Projects** → Click **"+ Add"**
-4. **Configure Project:**
-   - **Name**: `SRE Project`
-   - **Organization**: `Default`
-   - **Source Control Type**: `Git`
-   - **Source Control URL**:
-     ```
-     https://github.com/cguillencr/sre-abc-training.git
-     ```
-   - **Source Control Branch/Tag/Commit**: leave blank (default = `main`)
-   - Leave the rest of the fields unchanged and click **Save**
+1. Access the **AWX Web UI** using the URL from Step 4.
+2. Log in as `admin`.
+3. Navigate to **Projects** and click **+ Add**.
+4. Configure the project:
 
-> **Note:** This repository is public and read-only. You will **not push any changes** to it. It's used only so AWX can load the playbook `collect-status-application.yaml` during the lab.
+| Field | Value |
+|---|---|
+| Name | `SRE Project` |
+| Organization | `Default` |
+| Source Control Type | `Git` |
+| Source Control URL | `https://github.com/cguillencr/sre-abc-training.git` |
+| Source Control Branch/Tag/Commit | Leave blank to use the default branch |
 
-#### 🔐 Why Not Use the IBM Internal Repo?
+5. Leave the remaining fields unchanged and click **Save**.
 
-Because:
+> The repository is public and read-only. Students do not need to push changes or configure Git credentials.
 
-- Students not on VPN or without access would break the exercise
-- It may require authentication setup in AWX (SSH keys or GitHub App token)
-- The repo content is static during the exercise, so the public fork is sufficient
+> **Why not use an IBM internal repository?**
+>
+> - Students without VPN access could not complete the exercise.
+> - Private repositories require credentials, SSH keys, or GitHub App configuration.
+> - The lab content is static, so a public repository is sufficient.
 
-> **Example:** This is how your AWX project should look after saving:
+> Example project configuration:
 >
 > ![AWX SRE Project Configuration](./images/awx-sre-project.png)
 
-### Step 6: Create Runbook (Job Template)
+### Step 6: Create Runbook Job Template
 
-1. **Navigate to Templates** → Click **"+ Add" → Job Template**
-2. **Configure Template:**
-   - **Name**: `Collect System Status`
-   - **Job Type**: `Run`
-   - **Inventory**: `Demo Inventory`
-   - **Project**: `SRE Project` (from Step 5)
-   - **Playbook**: `exercises/exercise13/collect-status-application.yaml`
-   - **Credential**: `Demo Credential`
-   - Click **Save**
+1. Navigate to **Templates**.
+2. Click **+ Add** and select **Job Template**.
+3. Configure the template:
 
-> **Example:** Your Job Template setup in AWX should look similar to this:
+| Field | Value |
+|---|---|
+| Name | `Collect System Status` |
+| Job Type | `Run` |
+| Inventory | `Demo Inventory` |
+| Project | `SRE Project` |
+| Playbook | `exercises/exercise13/collect-status-application.yaml` |
+| Credential | `Demo Credential` |
+
+4. Click **Save**.
+
+> Example job template:
 >
 > ![AWX Job Template Setup](./images/awx-template-setup.png)
 
 ### Step 7: Test Manual Execution
 
-1. **Find your job template** in the Templates list
-2. **Click the rocket icon** (🚀) to launch
-3. **Verify successful execution** (should show green checkmark)
+1. Find the `Collect System Status` template in the Templates list.
+2. Click the rocket icon (🚀) to launch it.
+3. Open the resulting job.
+4. Verify that the job completes with a green successful status.
 
-**Expected Result:** Job should complete successfully and show system information in the output logs.
+Expected result: the job completes successfully and shows diagnostic information in its output.
 
-> **Example:** After clicking the rocket icon, your job should appear like this in the Jobs list:
+> Example job list:
 >
 > ![AWX Jobs List](./images/awx-jobs.png)
 
-> **Note:** If the job shows a green checkmark but no output appears, try refreshing the page. AWX sometimes delays the display of job logs in the UI until you reload.
+> **Note:** If the job is successful but output is not immediately displayed, refresh the AWX page. AWX can delay log rendering in the UI.
 
 ### Deep Dive: Understanding the Runbook
 
-Let's examine what our runbook actually does:
+The runbook collects diagnostic information for incident response:
 
 ```yaml
-# Content of collect-status-application.yaml
 ---
 - name: Collect System Diagnostics for Incident Response
   hosts: localhost
   gather_facts: yes
+
   tasks:
     - name: Get system uptime
       command: uptime
       register: system_uptime
-      
+
     - name: Check disk usage
       command: df -h
       register: disk_usage
-      
+
     - name: Get running processes
       command: ps aux --sort=-%cpu | head -20
       register: top_processes
-      
+
     - name: Check Kubernetes pod status
       command: kubectl get pods -A
       register: k8s_pods
       ignore_errors: yes
-      
+
     - name: Display collected information
       debug:
         msg: |
           === INCIDENT RESPONSE DIAGNOSTICS ===
           System Uptime: {{ system_uptime.stdout }}
-          
+
           Top CPU Processes:
           {{ top_processes.stdout }}
-          
+
           Kubernetes Status:
           {{ k8s_pods.stdout }}
 ```
 
-**Why this matters in SRE:**
+Why this matters for SRE work:
 
-- **Standardized response**: Every incident gets the same diagnostic information
-- **Time savings**: No manual command execution during incidents
-- **Documentation**: All actions are logged automatically
-- **Consistency**: Eliminates human error in diagnostic collection
+- **Standardized response:** Every incident receives the same initial diagnostic collection.
+- **Time savings:** Responders do not need to manually run routine commands.
+- **Documentation:** AWX records the execution and output.
+- **Consistency:** The runbook reduces manual variation during an incident.
 
 ---
 
@@ -208,107 +261,110 @@ Let's examine what our runbook actually does:
 
 ### Step 8: Create API Application
 
-1. **Navigate to Applications** (under Administration)
-2. **Click "+ Add"**
-3. **Configure Application:**
-   - **Name**: `Grafana Integration`
-   - **Organization**: `Default`
-   - **Authorization Grant Type**: `Resource owner password-based`
-   - **Client Type**: `Confidential`
-   - Click **Save**
-4. **Copy the Client ID and Secret** (you'll need these later)
+1. In AWX, navigate to **Administration** → **Applications**.
+2. Click **+ Add**.
+3. Configure the application:
 
-> ℹ️ **Important:** This is the only time the API token will be shown. Make sure to copy and save it securely — you won't be able to retrieve it later.
+| Field | Value |
+|---|---|
+| Name | `Grafana Integration` |
+| Organization | `Default` |
+| Authorization Grant Type | `Resource owner password-based` |
+| Client Type | `Confidential` |
+
+4. Click **Save**.
+5. Copy the generated Client ID and Client Secret.
+
+> ℹ️ The client secret is shown only once. Store it securely if you need it later.
 
 ### Step 9: Generate a Personal API Token
 
-1. **Go to Users** (under Access) → Click on admin → **Tokens** → **"+ Add"**
-2. **Configure Token:**
-   - **Application**: `Grafana Integration`
-   - **Scope**: `Write`
-   - Click **Save**
-3. **Copy the Token** (you'll need this for Grafana)
+1. Go to **Access** → **Users**.
+2. Select the `admin` user.
+3. Open **Tokens**.
+4. Click **+ Add**.
+5. Configure the token:
 
-> ℹ️ **Important:** This is the only time the **token value** and associated **refresh token** will be shown. Make sure to copy and store them securely. You won't be able to retrieve them again from the UI.
+| Field | Value |
+|---|---|
+| Application | `Grafana Integration` |
+| Scope | `Write` |
+
+6. Click **Save**.
+7. Copy the token value.
+
+> ℹ️ The token value and refresh token are only displayed once. Store them securely. You cannot retrieve the token value later.
 
 ### Step 10: Test API Access
 
-> **Open a new terminal window** for this step. You'll be using `curl` to interact with the AWX API directly.  
-> Keep your current Minikube terminal open if it's running port forwarding or watching pods.
+Open a **new terminal window** for API testing.
+
+First, in another terminal, start or keep running the AWX service tunnel:
 
 ```bash
-# Replace with your actual values
+minikube service awx-demo-service -n awx --url
+```
+
+Copy the URL that Minikube prints, then set your variables:
+
+```bash
 export AWX_TOKEN="your_token_here"
 export AWX_URL="http://127.0.0.1:<random-port>"
 ```
 
-> **Note:** The AWX URL will always start with `http://127.0.0.1:<random-port>`  
-> This value comes from the output of:
+> **Important:** Keep the terminal running `minikube service awx-demo-service -n awx --url` open while running the API commands below. Closing it can stop the local URL.
 >
-> ```bash
-> minikube service awx-demo-service -n awx --url
-> ```
->
-> The port number is dynamically assigned and will be different for each student or environment. Be sure to use the full output as-is.
+> The port is dynamically assigned and can differ between students or after restarting the service command. Use the full URL exactly as Minikube prints it.
 
-#### Test API connectivity
+Test connectivity and authentication:
 
 ```bash
-curl -s -H "Authorization: Bearer $AWX_TOKEN" \
-     -H "Content-Type: application/json" \
-     $AWX_URL/api/v2/me/ | jq '.results[] | {id, username, is_superuser}'
+curl -s \
+  -H "Authorization: Bearer $AWX_TOKEN" \
+  -H "Content-Type: application/json" \
+  "$AWX_URL/api/v2/me/" | jq '.results[] | {id, username, is_superuser}'
 ```
 
-You should receive a JSON response with your user info:
+You should receive JSON containing your user details, similar to:
 
 ```json
 {
   "id": 1,
   "username": "admin",
-  "is_superuser": true,
-  ...
+  "is_superuser": true
 }
 ```
 
 ### Deep Dive: AWX REST API
 
-Understanding the API calls that power automation.
+The AWX API allows external systems such as Grafana, PagerDuty, scripts, and custom applications to interact with automation resources.
 
-#### 1. List all job templates
-
-```bash
-curl -s -H "Authorization: Bearer $AWX_TOKEN" \
-     $AWX_URL/api/v2/job_templates/ | jq '.results[] | {id, name}'
-```
-
-This will return something like:
-
-```json
-{
-  "id": 9,
-  "name": "Collect System Status"
-}
-{
-  "id": 7,
-  "name": "Demo Job Template"
-}
-```
-
-> **Note:** Job Template IDs vary. Use the correct `id` from your own environment in the next step.
-
-#### 2. Launch a job (THIS IS WHAT GRAFANA WILL DO)
+#### List all job templates
 
 ```bash
-curl -s -X POST \
-     -H "Authorization: Bearer $AWX_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{}' \
-     $AWX_URL/api/v2/job_templates/9/launch/ | jq '{job, status}'
+curl -s \
+  -H "Authorization: Bearer $AWX_TOKEN" \
+  "$AWX_URL/api/v2/job_templates/" \
+  | jq '.results[] | {id, name}'
 ```
 
-> Replace `9` with the ID of your own `Collect System Status` job template.
+> Job template IDs differ between environments. Use the ID from your own `Collect System Status` template in later commands.
 
-The response will look like:
+#### Launch a job
+
+Replace `YOUR_ID` with the Job Template ID from the prior command:
+
+```bash
+curl -s \
+  -X POST \
+  -H "Authorization: Bearer $AWX_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}' \
+  "$AWX_URL/api/v2/job_templates/YOUR_ID/launch/" \
+  | jq '{job, status}'
+```
+
+Example response:
 
 ```json
 {
@@ -317,38 +373,30 @@ The response will look like:
 }
 ```
 
-#### 3. Monitor job status
+#### Monitor a job
+
+Replace `YOUR_JOB_ID` with the job ID returned by the launch request:
 
 ```bash
-curl -s -H "Authorization: Bearer $AWX_TOKEN" \
-     $AWX_URL/api/v2/jobs/3/ | jq '.status'
+curl -s \
+  -H "Authorization: Bearer $AWX_TOKEN" \
+  "$AWX_URL/api/v2/jobs/YOUR_JOB_ID/" \
+  | jq '.status'
 ```
 
-> Status will progress through:
->
-> - "pending"
-> - "running"
-> - "successful"
+A successful job normally transitions through:
 
-**Why API automation matters:**
+```text
+pending → running → successful
+```
 
-- **Integration**: Any system can trigger runbooks (Grafana, PagerDuty, custom scripts)
-- **Programmatic control**: No human needed to click buttons during incidents
-- **Scalability**: Handle hundreds of concurrent runbook executions
+Why API automation matters:
 
-> **Why this step is important:**
->
-> These API calls demonstrate how Grafana will trigger AWX jobs automatically when an alert fires.
->
-> By testing the API manually, you're confirming:
->
-> - The runbook can be launched without any human intervention
-> - AWX is reachable and properly secured via token-based access
-> - Your setup supports real-time automation from monitoring systems like Grafana
->
-> This is the core of an automated incident response system: when something goes wrong, your monitoring tools don't just send a notification — they can trigger diagnostic or remediation actions automatically through AWX.
->
-> This manual API test ensures the pieces are working *before* connecting them together with alerting logic.
+- **Integration:** Other systems can trigger runbooks.
+- **Programmatic control:** Automation can run without requiring a user to click through the AWX UI.
+- **Scalability:** The same pattern can support many automated workflows.
+
+This manual API test confirms that AWX is reachable, token authentication works, and a runbook can be launched programmatically before connecting Grafana alerting.
 
 ---
 
@@ -356,150 +404,187 @@ curl -s -H "Authorization: Bearer $AWX_TOKEN" \
 
 ### Step 11: Access Grafana
 
-> **Open a new terminal window** if your current one is running a port-forward or watching AWX logs.  
-> You'll need this terminal to retrieve the Grafana URL and access the web interface.
+Open a **new terminal window** and run:
 
 ```bash
-# Get Grafana URL
-minikube service grafana-service -n monitoring
+minikube service grafana-service -n monitoring --url
 ```
 
-Use the URL output (typically `http://127.0.0.1:<port>`) to open Grafana in your browser.
+Minikube prints a local URL similar to:
 
-**Default login:**
+```text
+http://127.0.0.1:54321
+```
 
-- **Username**: `admin`
-- **Password**: `admin`
+Open the printed URL in your browser.
 
-### Step 12: Create Contact Point
+> ⚠️ Keep the terminal running while you use Grafana. With the Docker driver on macOS and WSL2, Minikube may use a local tunnel that stops when the command exits or the terminal closes.
 
-1. **Navigate to** `Alerting → Contact Points → + Add Contact Point`
+Default Grafana credentials:
 
-2. **Configure the Webhook Contact Point:**
-   - **Name**: `AWX Runbook Trigger`
-   - **Integration**: `Webhook`
-   - **URL**:
-     ```
-     http://127.0.0.1:30100/api/v2/job_templates/9/launch/
-     ```
-   - **HTTP Method**: `POST`
+```text
+Username: admin
+Password: admin
+```
 
-3. **Authorization Header:**
-   - **Scheme**: `Bearer`
-   - **Credentials**: `<YOUR_API_TOKEN>` (e.g., `MZRXFg1SN1xQPzMhzRyV2csm5Phxe`)
+### Step 12: Create Webhook Contact Point
 
-4. **Extra Headers:**
-   - Add:
-     - **Key**: `Content-Type`
-     - **Value**: `application/json`
+Grafana runs **inside Kubernetes**, so it must call AWX through the internal Kubernetes Service address—not through the browser-facing `127.0.0.1` URL.
 
-5. **Save** the contact point
+1. In Grafana, navigate to **Alerting** → **Contact points**.
+2. Click **+ Add contact point**.
+3. Configure it:
 
-**Explanation:**
+| Field | Value |
+|---|---|
+| Name | `AWX Runbook Trigger` |
+| Integration | `Webhook` |
+| URL | `http://awx-demo-service.awx.svc.cluster.local:80/api/v2/job_templates/YOUR_ID/launch/` |
+| HTTP Method | `POST` |
 
-This sets up a webhook that triggers an AWX job template (ID `9`) whenever an alert fires. It includes:
+Replace `YOUR_ID` with the ID of your `Collect System Status` Job Template.
 
-- A Bearer token for authorization
-- A `Content-Type: application/json` header
-- POST request to AWX job template launch URL
+4. Configure authorization:
 
-> **Example:** Configuration for the AWX Runbook Trigger contact point using the Webhook integration in Grafana's latest UI.
+| Field | Value |
+|---|---|
+| Authorization Header Scheme | `Bearer` |
+| Credentials | Your AWX personal API token from Step 9 |
+
+5. Add an extra HTTP header:
+
+| Key | Value |
+|---|---|
+| `Content-Type` | `application/json` |
+
+6. Click **Save**.
+
+> **Why use an internal Service URL?**
+>
+> Grafana runs in the `monitoring` namespace. Inside the Grafana Pod, `127.0.0.1` points back to Grafana itself—not to your laptop, the Minikube host, or AWX.
+>
+> Kubernetes service DNS provides a stable in-cluster address:
+>
+> ```text
+> http://awx-demo-service.awx.svc.cluster.local:80
+> ```
+>
+> This works consistently for macOS, Ubuntu Linux, and WSL2 because the request stays within the Kubernetes cluster.
+
+> Example Grafana webhook contact point:
 >
 > ![AWX Runbook Trigger Contact Point](./images/grafana-contact-point-awx.png)
 
 ### Step 13: Create Alert Rule
 
-> **Note:** Grafana's alerting UI can vary slightly between versions. These steps apply to the unified alerting system.
+1. In Grafana, navigate to **Alerting** → **Alert rules**.
+2. Click **+ New alert rule**.
 
-1. In Grafana, go to **Alerting** → **Alert Rules**
-2. Click **"+ New alert rule"**
+#### Enter alert rule name
 
-#### 1. Enter alert rule name
+Set the name to:
 
-- **Name**: `High Application Latency`
+```text
+High Application Latency
+```
 
-#### 2. Define query and alert condition
+#### Define the query and condition
 
-- Click the **"Code"** tab inside the query box (or type directly if you're in "Builder")
-- Paste this PromQL query:
-  ```promql
-  sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
-  ```
+1. Select the Prometheus datasource.
+2. Click the **Code** tab in the query editor.
+3. Enter this PromQL query:
 
-- Set the **evaluation interval** (click Options) to `1m`
-- Below, in **Alert condition**, set:
-  - **WHEN** Query
-  - **IS ABOVE**
-  - `1`
+```promql
+sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
+```
 
-![High Application Latency Alert Rule](./images/grafana-alert-high-latency.png)
+4. Configure the evaluation interval as `1m`.
+5. Configure the alert condition:
 
-#### 3. Add folder and labels (optional but recommended)
+| Field | Value |
+|---|---|
+| WHEN | Query |
+| IS ABOVE | `1` |
 
-- **Folder**: You must select or create a folder to store your alert rule (e.g., alerts)
-- **Labels**: Two custom labels were added—severity and warning. These labels are essential for alert routing and filtering in contact points or silences
+> Example alert query:
+>
+> ![High Application Latency Alert Rule](./images/grafana-alert-high-latency.png)
 
-#### 4. Set Evaluation Behavior
+#### Add folder and labels
 
-- **Evaluation group**: Set to latency-group, indicating alerts are grouped and evaluated together every 1 minute
-- **Pending period**: 1 minute. The alert must breach its condition continuously for this duration before firing
-- **Keep firing**: Set to 0s, so the alert clears as soon as the condition returns to normal
+Select or create a folder:
 
-![Grafana Alert Folder and Evaluation Behavior](./images/grafana-alert-folder-evaluation.png)
+```text
+alerts
+```
 
-#### 5. Configure notifications
+Add labels:
 
-This step defines who receives alerts when a rule fires.
+| Label | Value |
+|---|---|
+| `severity` | `warning` |
 
-- **Recipient system**: Alertmanager (Grafana-managed)
-- **Contact point selected**: AWX Runbook Trigger
-  - This is a custom contact point you previously created to trigger an AWX job (runbook) when an alert fires
-- **Link option available**: You can view or create other contact points using the View or create contact points link
+#### Configure evaluation behavior
 
-Optional sections like muting, grouping, and timing are collapsed but can be configured for advanced control over how alerts behave when triggered repeatedly or simultaneously.
+| Field | Value |
+|---|---|
+| Evaluation group | `latency-group` |
+| Evaluation interval | `1m` |
+| Pending period | `1m` |
+| Keep firing | `0s` |
 
-![Grafana Alert Notification Settings](./images/grafana-alert-notification-settings.png)
+> Example evaluation behavior:
+>
+> ![Grafana Alert Folder and Evaluation Behavior](./images/grafana-alert-folder-evaluation.png)
 
-Click **Save**
+#### Configure notifications
 
-![Grafana Alert Result – High Latency](./images/grafana-alert-result-high-latency.png)
+1. Select **Alertmanager (Grafana-managed)** as the recipient system.
+2. Select the contact point:
+
+```text
+AWX Runbook Trigger
+```
+
+3. Save the alert rule.
+
+> Example notification configuration:
+>
+> ![Grafana Alert Notification Settings](./images/grafana-alert-notification-settings.png)
+
+> Example successful alert rule:
+>
+> ![Grafana Alert Result – High Latency](./images/grafana-alert-result-high-latency.png)
 
 ### Deep Dive: Understanding the Alert Query
 
-Let's break down what this PromQL query does:
-
 ```promql
-# Our alert query explained:
 sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
-
-# Breaking it down:
-# 1. otel_collector_span_metrics_duration_milliseconds_bucket
-#    ↳ OpenTelemetry histogram buckets measuring request duration
-
-# 2. rate(...[5m])
-#    ↳ Calculate per-second rate over 5-minute window
-
-# 3. sum(...) by (span_name)
-#    ↳ Aggregate all buckets, grouped by operation name
-
-# This effectively measures: "requests per second" for each operation
-# When this goes ABOVE 1 req/sec, it indicates high traffic/latency
 ```
 
-**Why this metric matters:**
+Breakdown:
 
-- **Leading indicator**: Rate increase often precedes latency issues
-- **Actionable**: Clear threshold that indicates when intervention is needed
-- **Observable**: Based on actual user request patterns
+```text
+otel_collector_span_metrics_duration_milliseconds_bucket
+  → OpenTelemetry histogram bucket metric for request duration
+
+rate(...[5m])
+  → Calculates the per-second rate over the last five minutes
+
+sum(...) by (span_name)
+  → Aggregates the rate by operation/span name
+```
+
+This query measures the rate of request-duration histogram bucket observations for each operation. In this learning exercise, the rule fires when the query value exceeds `1`.
 
 ### Deep Dive: Webhook Integration
 
-Here's what happens when Grafana sends the webhook:
+When the Grafana alert fires, Grafana makes a request similar to:
 
 ```bash
-# This is the EXACT HTTP call Grafana makes when alert fires:
-curl -X POST \
-  -H "Authorization: Bearer wpSCyIlK1j8Dy8zM7wTmZ7bbkdgQVE" \
+curl \
+  -X POST \
+  -H "Authorization: Bearer YOUR_AWX_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "receiver": "AWX Runbook Trigger",
@@ -513,235 +598,313 @@ curl -X POST \
         },
         "annotations": {
           "summary": "Application latency is above threshold"
-        },
-        "startsAt": "2025-07-29T19:45:00Z"
+        }
       }
-    ],
-    "groupLabels": {},
-    "commonLabels": {
-      "alertname": "High Application Latency"
-    },
-    "commonAnnotations": {},
-    "externalURL": "http://192.168.49.2:32000"
+    ]
   }' \
-  http://192.168.49.2:30100/api/v2/job_templates/13/launch/
+  "http://awx-demo-service.awx.svc.cluster.local:80/api/v2/job_templates/YOUR_ID/launch/"
 ```
 
-**The automation chain:**
+Replace:
 
-1. **Application** experiences high latency
-2. **OpenTelemetry** captures metrics
-3. **Prometheus** stores time-series data
-4. **Grafana** evaluates alert rule
-5. **Webhook** triggers AWX job automatically
-6. **AWX** executes diagnostic runbook
-7. **Results** logged for incident responders
+- `YOUR_AWX_TOKEN` with your AWX API token
+- `YOUR_ID` with the Job Template ID for `Collect System Status`
 
----
+The automation chain is:
 
-### Deep Dive: Observing the Full Pipeline
-
-This section helps you **watch the full alerting and automation pipeline** in real time — from metrics spikes to alert triggers and AWX runbook execution.
-
-#### What You'll Observe:
-
-When the app degrades or traffic spikes:
-
-1. **Latency increases** → Prometheus metrics reflect it
-2. **Grafana alert fires** → Visual red status on alert panel
-3. **Alert triggers webhook** → AWX job is created automatically
-4. **AWX job runs a playbook** → You’ll see a short-lived pod
-5. **Pod completes** → Job logs contain diagnostics; pod gets cleaned up
+1. Application experiences high latency or elevated traffic.
+2. OpenTelemetry captures telemetry.
+3. Prometheus stores and exposes metrics.
+4. Grafana evaluates the alert rule.
+5. Grafana sends the webhook to AWX.
+6. AWX launches the diagnostic runbook.
+7. Incident responders review the AWX job output.
 
 ---
 
-### Suggested Terminal Setup
+## Part 5: Test End-to-End Automation
 
-Run these in **four parallel terminals** for best visibility:
+### Observe the Full Pipeline
 
-#### **Terminal 1: Watch AWX Job Creation**
+Use multiple terminals to observe alerting and automation activity.
+
+#### Terminal 1: Watch AWX jobs
 
 ```bash
-# Continuously watch for AWX job creations
-while true; do clear; kubectl get jobs -n awx; sleep 2; done
+while true; do
+  clear
+  kubectl get jobs -n awx
+  sleep 2
+done
 ```
 
-> Look for new `automation-job-*` jobs being created when alerts fire.
+Look for new `automation-job-*` Jobs after an alert fires.
 
----
+#### Terminal 2: View AWX job logs
 
-#### **Terminal 2: View AWX Job Logs**
+Find the job pod:
 
 ```bash
-# Wait for the job pod to appear (check Terminal 1 output)
 kubectl get pods -n awx | grep automation-job
-
-# Once the pod appears, stream its logs:
-kubectl logs -n awx <pod-name> -f
 ```
 
-> These pods are short-lived. If the job finishes fast, the pod might be gone — check Terminal 1 again and be quick!
+Stream its logs:
 
----
+```bash
+kubectl logs -n awx POD_NAME -f
+```
 
-#### **Terminal 3: View Prometheus Metrics**
+Replace `POD_NAME` with the actual Pod name.
+
+> These Pods are short-lived. If the job completes quickly, run the first command again to identify a later job.
+
+#### Terminal 3: View Prometheus metrics
+
+Run this command in a dedicated terminal:
 
 ```bash
 kubectl port-forward -n monitoring svc/prometheus-service 9090:9090
 ```
 
-Then open your browser:
-[http://localhost:9090](http://localhost:9090)
-Run the following query:
+Keep the terminal open, then visit:
+
+[http://127.0.0.1:9090](http://127.0.0.1:9090)
+
+Run this PromQL query:
 
 ```promql
 sum(rate(otel_collector_span_metrics_duration_milliseconds_bucket[5m])) by (span_name)
 ```
 
-> You should see a spike in latency when degradation is triggered.
-
+> Example Prometheus query:
+>
 > ![Prometheus Latency Query – Span Names](./images/prometheus-latency-query-span-names.png)
 
----
-
-#### **Terminal 4: Watch for Job Pods**
+#### Terminal 4: Watch AWX automation Pods
 
 ```bash
-# Watch for the automation-job pod itself
-while true; do clear; kubectl get pods -n awx | grep automation-job; sleep 2; done
-```
-
-> The pod will be `Running`, then switch to `Completed`, and finally disappear.
-
----
-
-### Testing It End-to-End
-
-Trigger the alert using:
-
-```bash
-kubectl exec -n application deployment/sre-abc-training-app -- curl -X POST http://localhost:8080/degrade
-```
-
-Or simulate load with:
-
-```bash
-for i in {1..100}; do
-  kubectl exec -n application deployment/sre-abc-training-app -- curl http://localhost:8080/api/data &
+while true; do
+  clear
+  kubectl get pods -n awx | grep automation-job
+  sleep 2
 done
 ```
 
----
+The Pod typically transitions through:
+
+```text
+Pending → Running → Completed → deleted
+```
+
+### Trigger the Alert
+
+Trigger application degradation:
+
+```bash
+kubectl exec \
+  -n application \
+  deployment/sre-abc-training-app \
+  -- curl -X POST http://localhost:8080/degrade
+```
+
+Or simulate application load:
+
+```bash
+for i in {1..100}; do
+  kubectl exec \
+    -n application \
+    deployment/sre-abc-training-app \
+    -- curl http://localhost:8080/api/data &
+done
+```
 
 ### Success Criteria
 
-| Event                 | What to Look For                                |
-| --------------------- | ----------------------------------------------- |
-| **Metric spike**      | Latency increase in Prometheus                  |
-| **Alert fired**       | Alert panel turns red in Grafana                |
-| **AWX job triggered** | New `automation-job-*` appears in AWX namespace |
-| **Logs available**    | `kubectl logs` shows Ansible playbook execution |
-| **Pod cleanup**       | Pod auto-deletes after successful run           |
+| Event | Expected result |
+|---|---|
+| Metric spike | Prometheus shows increased telemetry values |
+| Alert firing | Grafana displays a firing alert |
+| AWX trigger | A new `automation-job-*` Job appears in the `awx` namespace |
+| Runbook output | AWX job logs show Ansible execution and diagnostics |
+| Cleanup | The short-lived automation Pod completes and is eventually removed |
 
 ---
 
 ## Troubleshooting
 
-### Common Issues
+### AWX is not accessible
 
-#### AWX not accessible
+Get a fresh AWX URL:
 
 ```bash
-# Get the correct service URL
 minikube service awx-demo-service -n awx --url
+```
 
-# If still not working, check pod status
+Keep that terminal open while using the URL.
+
+Check AWX Pods:
+
+```bash
 kubectl get pods -n awx
-kubectl describe pod -n awx -l app.kubernetes.io/name=awx-demo
+```
 
-# Check logs for errors
+Describe AWX Pods:
+
+```bash
+kubectl describe pod -n awx -l app.kubernetes.io/name=awx-demo
+```
+
+View AWX Web logs:
+
+```bash
 kubectl logs -n awx -l app.kubernetes.io/component=web
 ```
 
-#### API calls failing
+### AWX API calls are failing
+
+Set your browser-facing AWX variables:
 
 ```bash
-# Test API connectivity step by step
-export AWX_URL="http://192.168.49.2:30100"
+export AWX_URL="http://127.0.0.1:<random-port>"
 export AWX_TOKEN="your_token_here"
-
-# 1. Test basic connectivity
-curl -v $AWX_URL/api/v2/
-
-# 2. Test authentication
-curl -H "Authorization: Bearer $AWX_TOKEN" $AWX_URL/api/v2/me/
-
-# 3. Find your job template ID
-curl -H "Authorization: Bearer $AWX_TOKEN" \
-     $AWX_URL/api/v2/job_templates/ | jq '.results[] | {id, name}'
-
-# 4. Test job launch
-curl -X POST \
-     -H "Authorization: Bearer $AWX_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{}' \
-     $AWX_URL/api/v2/job_templates/YOUR_ID/launch/
 ```
 
-#### Alerts not triggering AWX
+Test basic connectivity:
 
 ```bash
-# Check Grafana can reach AWX
-kubectl exec -n monitoring deployment/grafana-deployment -- \
-  curl -v http://192.168.49.2:30100/api/v2/
+curl -v "$AWX_URL/api/v2/"
+```
 
-# Test webhook manually
-kubectl exec -n monitoring deployment/grafana-deployment -- \
-  curl -X POST \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+Test authentication:
+
+```bash
+curl -H "Authorization: Bearer $AWX_TOKEN" "$AWX_URL/api/v2/me/"
+```
+
+List Job Templates:
+
+```bash
+curl \
+  -H "Authorization: Bearer $AWX_TOKEN" \
+  "$AWX_URL/api/v2/job_templates/" \
+  | jq '.results[] | {id, name}'
+```
+
+Launch a Job Template:
+
+```bash
+curl \
+  -X POST \
+  -H "Authorization: Bearer $AWX_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{}' \
-  http://192.168.49.2:30100/api/v2/job_templates/13/launch/
-
-# Check Grafana notification logs
-kubectl logs -n monitoring deployment/grafana-deployment | grep -i webhook
+  "$AWX_URL/api/v2/job_templates/YOUR_ID/launch/"
 ```
 
-#### Prometheus metrics missing
+### Grafana alert does not trigger AWX
+
+Verify that Grafana can reach AWX through Kubernetes internal DNS:
 
 ```bash
-# Check OpenTelemetry collector is running
+kubectl exec \
+  -n monitoring \
+  deployment/grafana-deployment \
+  -- curl -v http://awx-demo-service.awx.svc.cluster.local:80/api/v2/
+```
+
+Test the AWX webhook endpoint from the Grafana Pod:
+
+```bash
+kubectl exec \
+  -n monitoring \
+  deployment/grafana-deployment \
+  -- curl \
+    -X POST \
+    -H "Authorization: Bearer YOUR_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{}' \
+    http://awx-demo-service.awx.svc.cluster.local:80/api/v2/job_templates/YOUR_ID/launch/
+```
+
+Check Grafana logs for webhook errors:
+
+```bash
+kubectl logs \
+  -n monitoring \
+  deployment/grafana-deployment \
+  | grep -i webhook
+```
+
+### Prometheus metrics are missing
+
+Check that the OpenTelemetry Collector is running:
+
+```bash
 kubectl get pods -n opentelemetry
+```
 
-# Test metrics endpoint
-kubectl exec -n opentelemetry deployment/otel-collector -- \
-  curl http://localhost:8889/metrics | grep otel_collector_span
+Inspect OpenTelemetry metrics:
 
-# Verify application is generating traces
-kubectl logs -n application deployment/sre-abc-training-app
+```bash
+kubectl exec \
+  -n opentelemetry \
+  deployment/otel-collector \
+  -- curl http://localhost:8889/metrics \
+  | grep otel_collector_span
+```
+
+Verify that the application is generating telemetry:
+
+```bash
+kubectl logs \
+  -n application \
+  deployment/sre-abc-training-app
+```
+
+### Grafana is not accessible
+
+Get a fresh Grafana URL:
+
+```bash
+minikube service grafana-service -n monitoring --url
+```
+
+Keep the terminal open while using the printed URL.
+
+Check Grafana status:
+
+```bash
+kubectl get pods -n monitoring
+kubectl logs -n monitoring deployment/grafana-deployment --tail=200
 ```
 
 ---
 
 ## Final Objective
 
-By completing this exercise, you should have implemented an automated incident response workflow triggered by Grafana alerts.
+By completing this exercise, you have implemented an automated incident-response workflow triggered by Grafana alerts.
 
-### Goal
+The workflow:
 
-Each time an alert is fired in Grafana, a diagnostic runbook should be executed automatically via AWX. This setup enhances incident response by:
+1. Detects an application condition through telemetry and metrics.
+2. Evaluates the condition in Grafana.
+3. Triggers an AWX runbook through a secured webhook.
+4. Collects diagnostics automatically.
+5. Stores execution output in AWX for responders to review.
 
-- Collecting real-time system diagnostics
-- Reducing manual intervention and response time
-- Ensuring consistent and repeatable incident handling
+This workflow improves incident response by:
 
-### Alert Integration Example
+- Collecting diagnostic information quickly
+- Reducing manual intervention
+- Creating consistent, repeatable automation
+- Recording response actions and output
+- Connecting observability systems with operational runbooks
 
-As the application degrades due to simulated conditions, alerts will be triggered:
+Example alert state:
 
 ![grafana-error-triggering](./images/grafana-error-triggering.png)
 
-Each alert should automatically execute your runbook in AWX:
+Example AWX Job executions:
 
 ![awx-template-job-executions](./images/awx-template-job-executions.png)
 
@@ -749,13 +912,12 @@ Each alert should automatically execute your runbook in AWX:
 
 ## Next Steps
 
-In [Exercise 14](../exercise14), we will conduct an **Operational Readiness Review (ORR)** to ensure your system meets production-level expectations.
+In [Exercise 14](../exercise14), you will conduct an Operational Readiness Review and evaluate whether the environment meets production-oriented operational expectations.
 
 You should now be confident with:
 
-- Deploying AWX and configuring job templates through the UI and API
-- Integrating alerting systems (Grafana) with automation tools (AWX)
-- Writing diagnostic Ansible runbooks for incident response
-- Testing and validating alert-triggered automation in a Kubernetes environment
-
----
+- Deploying AWX and configuring Job Templates through the UI and API
+- Configuring Grafana alerting and webhook contact points
+- Writing and executing diagnostic Ansible runbooks
+- Testing alert-triggered automation
+- Troubleshooting Kubernetes, Prometheus, Grafana, and AWX integration

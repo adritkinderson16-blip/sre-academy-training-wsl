@@ -10,12 +10,12 @@ variable "app_name" {
 
 variable "image" {
   description = "Docker image to deploy"
-  default     = "cguillenmendez/sre-abc-training-python-app:latest"
+  default     = "sre-abc-training-python-app:0.0.3"
 }
 
 variable "replicas" {
   description = "Number of replicas in the deployment"
-  default     = 3
+  default     = 2
 }
 
 variable "container_port" {

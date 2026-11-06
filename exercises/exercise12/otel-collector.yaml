@@ -76,7 +76,7 @@ data:
 
     exporters:
       otlphttp/loki:
-        endpoint: http://loki.opentelemetry.svc.cluster.local:3100/otlp
+        endpoint: http://loki.opentelemetry:3100/otlp
         tls:
           insecure: true
       otlp/jaeger:

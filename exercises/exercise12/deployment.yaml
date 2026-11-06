@@ -24,7 +24,8 @@ spec:
     spec:
       containers:
       - name: sre-abc-training-app
-        image: cguillenmendez/sre-abc-training-python-app:0.0.23
+        image: sre-abc-training-python-app:0.0.3
+        imagePullPolicy: Never
         ports:
         - containerPort: 5000
         volumeMounts:
@@ -89,16 +90,16 @@ spec:
             command: ["/bin/sh", "-c"]
             args:
               - |
-                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                curl http://sre-abc-training-service:5000/store
                 sleep 1;
-                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                curl http://sre-abc-training-service:5000/store
                 sleep 1;
-                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                curl http://sre-abc-training-service:5000/store
                 sleep 1;
-                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                curl http://sre-abc-training-service:5000/store
                 sleep 1;
-                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                curl http://sre-abc-training-service:5000/store
                 sleep 1;
-                curl http://sre-abc-training-service.application.svc.cluster.local:5000/store
+                curl http://sre-abc-training-service:5000/store
                 sleep 1;
           restartPolicy: Never

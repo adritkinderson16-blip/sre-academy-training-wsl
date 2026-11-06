@@ -59,7 +59,7 @@ pause() {
 # -------------------------------
 log "=== EXERCISE 12: Alerting with Grafana Setup ==="
 log "Checking toolchain dependencies..."
-for tool in colima minikube kubectl docker; do
+for tool in minikube kubectl docker; do
   ensure_tool "$tool"
 done
 pause 2
@@ -71,16 +71,16 @@ log "Performing full cleanup of Minikube and Colima environments..."
 safe_run minikube delete --all
 
 log "Stopping and cleaning up Colima..."
-safe_run colima stop --force
-safe_run colima delete --force
+#safe_run colima stop --force
+#safe_run colima delete --force
 pause 5
 
 # -------------------------------
 # Startup Phase (Colima and Minikube)
 # -------------------------------
 log "Initializing and Starting Colima with Docker runtime..."
-start_if_not_running colima
-safe_run colima start --cpu 2 --memory 2048 --disk 100
+#start_if_not_running colima
+#safe_run colima start --cpu 2 --memory 2048 --disk 100
 pause 5
 
 log "Starting Minikube with Docker driver..."

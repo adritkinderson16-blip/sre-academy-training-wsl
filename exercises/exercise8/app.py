@@ -13,7 +13,7 @@ from opentelemetry.instrumentation.wsgi import OpenTelemetryMiddleware
 resource = Resource.create({"service.name": "sre-abc-training-app"})  # Replace with your service name
 
 span_exporter = OTLPSpanExporter(
-    endpoint="otel-collector.opentelemetry.svc.cluster.local:4317",  # Update with your OTEL Collector endpoint
+    endpoint="otel-collector.opentelemetry:4317",  # Update with your OTEL Collector endpoint
     insecure=True  # Set to True if using an unencrypted connection
 )
 

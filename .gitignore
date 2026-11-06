@@ -1,3 +1,10 @@
 exercises/exercise14/my-sre-app-chart
 .DS_Store
 .DS_Store
+
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.log
+*.bak
+*.before-json-fix

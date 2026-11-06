@@ -32,7 +32,7 @@ data:
       - job_name: 'otel-collector'
         scrape_interval: 15s
         static_configs:
-          - targets: ['otel-collector.opentelemetry.svc.cluster.local:9464']  # Address of the OpenTelemetry Collector
+          - targets: ['otel-collector.opentelemetry:9464']  # Address of the OpenTelemetry Collector
 ---
 apiVersion: apps/v1
 kind: Deployment

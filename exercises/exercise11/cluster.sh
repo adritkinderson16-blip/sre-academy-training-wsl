@@ -58,7 +58,7 @@
    # Toolchain Check (before anything else)
    # -------------------------------
    log "Checking toolchain dependencies..."
-   for tool in colima podman minikube kubectl docker; do
+   for tool in minikube kubectl docker; do
      ensure_tool "$tool"
    done
    pause 2
@@ -69,22 +69,24 @@
    log "Performing full cleanup of Minikube, Podman, and Colima environments..."
    safe_run minikube delete --all
 
-   if podman machine list | grep -q "podman-machine-default"; then
-     safe_run podman machine stop
-     safe_run podman machine rm --force
-   fi
+  # Windows/WSL: skipping Podman/Colima cleanup
+   #if podman machine list | grep -q "podman-machine-default"; then
+     #safe_run podman machine stop
+     #safe_run podman machine rm --force
+  #fi
 
-   safe_run colima stop
-   safe_run colima delete --force
+   #safe_run colima stop
+   #safe_run colima delete --force
    pause 5
 
    # -------------------------------
    # Startup Phase (Re-initialize Minikube/Colima)
    # -------------------------------
-   log "Initializing and Starting Colima (for Minikube Docker driver)..."
-   start_if_not_running colima
-   safe_run colima start --cpu 2 --memory 2048 --disk 100
-   pause 5
+   #log "Initializing and Starting Colima (for Minikube Docker driver)..."
+   #start_if_not_running colima
+   #safe_run colima start --cpu 2 --memory 2048 --disk 100
+   log "Using Docker Desktop on Windows/WSL"
+   pause 2
 
    log "Starting Minikube with Docker driver..."
    safe_run minikube start --driver=docker

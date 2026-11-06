@@ -31,8 +31,24 @@ resource "kubernetes_deployment" "app_deployment" {
 
       spec {
         container {
-          name  = var.app_name
-          image = var.image
+          name              = var.app_name
+          image             = var.image
+          image_pull_policy = "Never"
+
+          env {
+            name  = "MESSAGE_TEXT"
+            value = kubernetes_config_map.app_config.data["MESSAGE_TEXT"]
+          }
+
+          env {
+            name  = "REDIS_HOST"
+            value = kubernetes_service.redis.metadata[0].name
+          }
+
+          env {
+            name  = "REDIS_PORT"
+            value = "6379"
+          }
 
           port {
             container_port = var.container_port

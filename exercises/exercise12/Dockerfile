@@ -1,8 +1,5 @@
 FROM python:3.10
 
-# Expose the Flask app port
-EXPOSE 5000
-
 # Set the working directory inside the container
 WORKDIR /app
 
@@ -14,7 +11,8 @@ RUN pip install flask==3.0.3 \
     opentelemetry-instrumentation-flask==0.48b0 \
     opentelemetry-instrumentation-wsgi==0.48b0 \
     opentelemetry-instrumentation-logging==0.48b0 \
-    opentelemetry-exporter-otlp==1.27.0
+    opentelemetry-exporter-otlp==1.27.0 \
+    prometheus-client
 
 # Copy the application code into the container
 COPY . .
@@ -24,6 +22,12 @@ RUN mkdir -p /app/logs
 
 # Make sure the application has write permission to the log file
 RUN chmod -R 777 /app/logs
+
+# Expose the Flask app port
+EXPOSE 5000
+
+# Flask configuration
+ENV FLASK_APP=app.py
 
 # Set the default command to run the Flask app
 CMD ["flask", "run", "--host", "0.0.0.0"]

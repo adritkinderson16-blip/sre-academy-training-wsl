@@ -3,7 +3,7 @@ import random
 import time
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
 from opentelemetry.sdk.resources import Resource
@@ -29,7 +29,7 @@ logger.error('This message should go to the log file with Err level')
 resource = Resource.create({"service.name": "sre-abc-training-app"})
 
 span_exporter = OTLPSpanExporter(
-    endpoint="otel-collector.opentelemetry.svc.cluster.local:4317",
+    endpoint="otel-collector.opentelemetry:4317",
     insecure=True
 )
 
@@ -47,7 +47,7 @@ set_logger_provider(logger_provider)
 
 # Set up OTLP Log Exporter for logs
 log_exporter = OTLPLogExporter(
-    endpoint="otel-collector.opentelemetry.svc.cluster.local:4317",
+    endpoint="otel-collector.opentelemetry:4317",
     insecure=True
 )
 

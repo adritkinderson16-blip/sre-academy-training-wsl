@@ -8,6 +8,7 @@ WORKDIR /app
 
 # Install Flask and OpenTelemetry libraries
 RUN pip install flask==3.0.3 \
+    prometheus-client \
     opentelemetry-api==1.27.0 \
     opentelemetry-sdk==1.27.0 \
     opentelemetry-exporter-otlp-proto-grpc==1.27.0 \
@@ -26,4 +27,5 @@ RUN mkdir -p /app/logs
 RUN chmod -R 777 /app/logs
 
 # Set the default command to run the Flask app
+ENV FLASK_APP=app.py
 CMD ["flask", "run", "--host", "0.0.0.0"]

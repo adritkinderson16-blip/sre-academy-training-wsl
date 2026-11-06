@@ -20,7 +20,8 @@ spec:
     spec:
       containers:
       - name: sre-abc-training-app
-        image: cguillenmendez/sre-abc-training-python-app:0.0.23
+        image: sre-abc-training-python-app:0.0.1
+        imagePullPolicy: Never
         ports:
         - containerPort: 5000
         volumeMounts:

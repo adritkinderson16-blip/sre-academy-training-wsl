@@ -26,7 +26,7 @@ logger.error('This message should go to the log file with Err level')
 resource = Resource.create({"service.name": "sre-abc-training-app"})  # Replace with your service name
 
 span_exporter = OTLPSpanExporter(
-    endpoint="otel-collector.opentelemetry.svc.cluster.local:4317",  # Update with your OTEL Collector endpoint
+    endpoint="otel-collector.opentelemetry:4317",  # Update with your OTEL Collector endpoint
     insecure=True  # Set to True if using an unencrypted connection
 )
 
@@ -45,7 +45,7 @@ set_logger_provider(logger_provider)
 
 # Set up OTLP Log Exporter for logs
 log_exporter = OTLPLogExporter(
-    endpoint="otel-collector.opentelemetry.svc.cluster.local:4317",  # Update with your OTEL Collector endpoint
+    endpoint="otel-collector.opentelemetry:4317",  # Update with your OTEL Collector endpoint
     insecure=True
 )
 
